@@ -4,161 +4,201 @@ import { ContentSession, InterviewQuestion } from '../types';
  * AI Service Layer
  * 
  * This service handles all AI-related logic.
- * Currently, it returns mock data to ensure stability during demonstrations.
- * The structure is designed to be easily replaced with real OpenAI/Gemini API calls.
+ * It uses a secure serverless proxy (/api/ai/chat) to call the OpenAI API.
  * 
  * SECURITY NOTE: 
- * For production (e.g., Vercel deployment), real API calls should be proxied 
- * through a serverless function (e.g., /api/ai/*) to keep API keys hidden.
+ * API keys are stored in environment variables on the server (Vercel) 
+ * and are never exposed to the client.
  */
 
 export const aiService = {
   /**
-   * 是否启用真实 API 调用 (部署在 Vercel 后可设为 true)
+   * 是否启用真实 AI 调用 (部署在 Vercel 后可设为 true)
+   * 注意：在本地开发时，如果未配置 OPENAI_API_KEY，请保持为 false 以使用 Mock 数据
    */
-  USE_REAL_API: false,
+  USE_REAL_API: true,
+
+  /**
+   * 统一调用 AI 聊天接口
+   */
+  async callAI(messages: { role: string; content: string }[], jsonMode: boolean = false): Promise<any> {
+    if (!this.USE_REAL_API) return null;
+
+    try {
+      const response = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          messages,
+          response_format: jsonMode ? { type: "json_object" } : undefined
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `AI API responded with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices[0].message.content;
+      
+      if (jsonMode) {
+        try {
+          // Sometimes AI wraps JSON in markdown blocks
+          const jsonStr = content.replace(/```json\n?|\n?```/g, '').trim();
+          return JSON.parse(jsonStr);
+        } catch (e) {
+          console.error('Failed to parse AI JSON response:', content);
+          throw new Error('AI 返回的数据格式不正确');
+        }
+      }
+      
+      return content;
+    } catch (error) {
+      console.error('AI Service Error:', error);
+      throw error;
+    }
+  },
 
   /**
    * Analyzes the match between a resume and a job description.
    */
   async analyzeJDMatch(resumeContent: string, jdText: string): Promise<ContentSession['matchResult']> {
-    console.log('AI Service: Analyzing JD match...', { resumeLength: resumeContent.length, jdLength: jdText.length });
+    console.log('AI Service: Analyzing JD match...');
     
     if (this.USE_REAL_API) {
-      try {
-        const response = await fetch('/api/ai/analyze-jd', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ resumeContent, jdText })
-        });
-        return await response.json();
-      } catch (error) {
-        console.error('API Error:', error);
-      }
+      const prompt = `
+你是一名资深招聘经理。请分析以下 JD（职位描述）与候选人简历的匹配程度。
+请严格按照以下 JSON 格式输出结果：
+{
+  "score": 匹配评分(0-100),
+  "pros": ["优势点1", "优势点2", ...],
+  "gaps": ["不足/缺口1", "不足/缺口2", ...],
+  "suggestions": ["针对性的修改建议1", "针对性的修改建议2", ...]
+}
+
+JD 内容：
+${jdText}
+
+简历内容：
+${resumeContent}
+      `;
+
+      return await this.callAI([
+        { role: "system", content: "你是一个专业的简历分析助手，只输出 JSON 格式的数据。" },
+        { role: "user", content: prompt }
+      ], true);
     }
 
-    // Simulate network delay
+    // Fallback to mock
     await new Promise(resolve => setTimeout(resolve, 1500));
-
-    // Mock response
     return {
       score: 85,
-      pros: [
-        '5年+ 前端开发经验，符合岗位高级职级要求',
-        '精通 React 生态，与岗位技术栈高度契合',
-        '有大型 SaaS 项目背景，具备复杂业务处理能力'
-      ],
-      gaps: [
-        '缺乏 Node.js 服务端开发相关描述',
-        '简历中未体现对 Webpack/Vite 构建优化的具体成果',
-        '缺少跨部门协作与团队领导的相关案例'
-      ],
-      suggestions: [
-        '在“技术栈”中增加对 Node.js 的描述，并在最近的项目中补充一个涉及前后端联调或简单中间件开发的场景。',
-        '量化你的工作成果。例如：将“优化了页面加载速度”改为“通过引入 Vite 和按需加载，将首屏加载时间降低了 40%”。'
-      ],
+      pros: ['5年+ 前端开发经验', '精通 React 生态', '有大型项目背景'],
+      gaps: ['缺乏 Node.js 经验', '未体现构建优化成果'],
+      suggestions: ['补充 Node.js 描述', '量化工作成果'],
     };
   },
 
   /**
    * Optimizes resume text based on specific actions.
-   * Future implementation: POST to /api/ai/optimize
    */
   async optimizeResumeText(text: string, action: string, jdContext?: string): Promise<string> {
-    console.log('AI Service: Optimizing text...', { action, jdContext: !!jdContext });
+    console.log('AI Service: Optimizing text...', { action });
     
     if (this.USE_REAL_API) {
-      try {
-        const response = await fetch('/api/ai/optimize-resume', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, action, jdContext })
-        });
-        const data = await response.json();
-        return data.optimizedText;
-      } catch (error) {
-        console.error('API Error:', error);
-      }
+      const prompt = `
+你是一名专业的简历优化专家。请根据以下要求优化简历片段。
+要求：${action}
+${jdContext ? `目标岗位背景：${jdContext}` : ''}
+
+原始文本：
+${text}
+
+请直接输出优化后的文本，不要包含任何解释或开场白。
+      `;
+
+      return await this.callAI([
+        { role: "system", content: "你是一个专业的简历文案优化专家。" },
+        { role: "user", content: prompt }
+      ]);
     }
 
-    // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // Simple mock transformation based on action
-    if (action === '更精炼') {
-      return text + '\n\n[AI 优化：已精简冗余描述，强化核心贡献]';
-    }
-    if (action === '更贴近岗位') {
-      return text + '\n\n[AI 优化：已根据 JD 关键词调整技能权重]';
-    }
     return text + `\n\n[AI 优化：执行了 ${action} 操作]`;
   },
 
   /**
    * Generates interview questions based on resume and JD.
-   * Future implementation: POST to /api/ai/generate-questions
    */
   async generateInterviewQuestions(resumeContent: string, jdText: string, count: number = 4): Promise<InterviewQuestion[]> {
     console.log('AI Service: Generating questions...', { count });
     
     if (this.USE_REAL_API) {
-      try {
-        const response = await fetch('/api/ai/interview-questions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ resumeContent, jdText, count })
-        });
-        const data = await response.json();
-        return data.questions;
-      } catch (error) {
-        console.error('API Error:', error);
-      }
+      const prompt = `
+你是一名资深面试官。请根据以下 JD 和简历，生成 ${count} 个针对性的面试问题。
+请严格按照以下 JSON 格式输出结果：
+{
+  "questions": [
+    { "id": "唯一ID", "question": "问题内容" },
+    ...
+  ]
+}
+
+JD 内容：
+${jdText}
+
+简历内容：
+${resumeContent}
+      `;
+
+      const result = await this.callAI([
+        { role: "system", content: "你是一个专业的面试官，只输出 JSON 格式的数据。" },
+        { role: "user", content: prompt }
+      ], true);
+      
+      return result.questions;
     }
 
     await new Promise(resolve => setTimeout(resolve, 1200));
-
-    const mockQuestions = [
-      '请详细介绍一下你在 SaaS 项目中负责的前端架构设计。',
-      '你是如何处理大规模 React 应用的性能优化问题的？',
-      '在跨部门协作中，如果遇到技术方案分歧，你会如何处理？',
-      '为什么选择我们公司？你认为你最大的核心竞争力是什么？',
-      '你在项目中遇到过最难的技术挑战是什么？是如何解决的？',
-      '谈谈你对前端工程化的理解。',
-      '如何看待当前前端技术栈的快速迭代？你平时是如何学习的？',
-      '描述一次你带领团队解决紧急线上 Bug 的经历。'
+    return [
+      { id: '1', question: '请详细介绍一下你在项目中的架构设计。' },
+      { id: '2', question: '你是如何处理性能优化问题的？' }
     ];
-
-    return mockQuestions.slice(0, count).map(q => ({
-      id: Math.random().toString(36).substr(2, 9),
-      question: q
-    }));
   },
 
   /**
    * Reviews a user's interview answer and provides feedback.
-   * Future implementation: POST to /api/ai/review-answer
    */
   async reviewInterviewAnswer(question: string, answer: string): Promise<{ feedback: string; tags: string[] }> {
     console.log('AI Service: Reviewing answer...');
     
     if (this.USE_REAL_API) {
-      try {
-        const response = await fetch('/api/ai/review-answer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question, answer })
-        });
-        return await response.json();
-      } catch (error) {
-        console.error('API Error:', error);
-      }
+      const prompt = `
+你是一名面试辅导专家。请点评用户对以下面试问题的回答。
+请严格按照以下 JSON 格式输出结果：
+{
+  "feedback": "详细的点评建议",
+  "tags": ["标签1", "标签2", "标签3"]
+}
+
+面试问题：
+${question}
+
+用户回答：
+${answer}
+      `;
+
+      return await this.callAI([
+        { role: "system", content: "你是一个专业的面试辅导专家，只输出 JSON 格式的数据。" },
+        { role: "user", content: prompt }
+      ], true);
     }
 
     await new Promise(resolve => setTimeout(resolve, 1000));
-
     return {
-      feedback: '“您的回答涵盖了技术细节，但建议增加更多关于‘为什么这么做’的思考。例如在提到性能优化时，可以先说明当时遇到的具体业务痛点（如首屏加载超过 5s），然后再引出优化手段和最终量化结果。”',
-      tags: ['逻辑清晰', '建议增加量化数据', '技术深度达标']
+      feedback: '回答逻辑清晰，但建议增加更多量化指标。',
+      tags: ['逻辑清晰', '建议量化']
     };
   }
 };

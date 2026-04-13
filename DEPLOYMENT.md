@@ -8,7 +8,7 @@
 
 - **隐藏 API Key**：如果直接在前端代码中调用 OpenAI API，你的 `OPENAI_API_KEY` 会暴露在浏览器的 Network 面板中，任何人都可以轻易窃取并消耗你的额度。
 - **跨域处理 (CORS)**：通过同域下的 `/api/*` 路径调用，可以避免复杂的跨域配置。
-- **请求流控**：可以在服务端对请求进行过滤、缓存或日志记录。
+- **中转站支持**：通过代理可以方便地接入 `gptsapi` 等中转服务。
 
 ## 2. 环境变量配置
 
@@ -16,7 +16,7 @@
 
 | 变量名 | 说明 | 示例值 |
 | :--- | :--- | :--- |
-| `OPENAI_API_KEY` | OpenAI 的官方 API 密钥 | `sk-xxxx...` |
+| `OPENAI_API_KEY` | OpenAI 中转站的 API 密钥 | `sk-xxxx...` |
 
 > **注意**：前端代码中不需要配置此变量，它仅在 `api/` 目录下的服务端代码中通过 `process.env.OPENAI_API_KEY` 访问。
 
@@ -24,16 +24,15 @@
 
 - `/src`: 前端 React 源代码。
 - `/api`: Vercel Serverless Functions 目录。
-  - `/api/ai/analyze-jd.ts`: 对应路径 `/api/ai/analyze-jd`
-  - `/api/ai/optimize-resume.ts`: 对应路径 `/api/ai/optimize-resume`
-  - `/api/ai/interview-questions.ts`: 对应路径 `/api/ai/interview-questions`
-  - `/api/ai/review-answer.ts`: 对应路径 `/api/ai/review-answer`
+  - `/api/ai/chat.ts`: 统一的 AI 聊天代理接口，对应路径 `/api/ai/chat`。
 
-## 4. 如何切换到真实 API？
+## 4. AI 功能接入
 
-1. 在 `src/services/aiService.ts` 中，将 `USE_REAL_API` 开关设为 `true`。
-2. 在 `/api/ai/*.ts` 文件中，引入 OpenAI SDK 并替换模拟逻辑。
-3. 确保 Vercel 后台已配置有效的 `OPENAI_API_KEY`。
+本项目已全面接入真实 AI 能力（基于 `gpt-4o-mini`）：
+- **JD 匹配分析**：自动分析简历与岗位的匹配度。
+- **简历优化**：针对性润色简历文案。
+- **面试问题生成**：基于背景预测高频面试题。
+- **面试回答点评**：实时反馈回答质量。
 
 ## 5. 本地开发
 

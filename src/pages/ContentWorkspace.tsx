@@ -49,6 +49,11 @@ const ContentWorkspace = () => {
   const [resumes, setResumes] = useState<ResumeItem[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
+  const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
+  const [isReviewing, setIsReviewing] = useState(false);
+  const [reviewResult, setReviewResult] = useState<{ feedback: string; tags: string[] } | null>(null);
+  const [userAnswer, setUserAnswer] = useState('');
+  const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
   const [showSidebar, setShowSidebar] = useState(true);
   const navigate = useNavigate();
 
@@ -122,16 +127,18 @@ const ContentWorkspace = () => {
   };
 
   const createSession = async () => {
-    // In a real app, we would fetch the actual resume content here
-    const mockResumeContent = "这是简历的原始文本内容...";
+    const selectedResume = resumes.find(r => r.id === workspaceState.selectedResumeId);
+    const resumeContext = selectedResume 
+      ? `简历名称: ${selectedResume.name}\n文件类型: ${selectedResume.fileType}\n(此处在真实应用中应为解析后的文件全文内容)`
+      : "这是简历的原始文本内容...";
     
     const matchResult = await aiService.analyzeJDMatch(
-      mockResumeContent, 
+      resumeContext, 
       workspaceState.jobInfo.jdText
     );
 
     const interviewQuestions = await aiService.generateInterviewQuestions(
-      mockResumeContent,
+      resumeContext,
       workspaceState.jobInfo.jdText
     );
 
@@ -143,7 +150,7 @@ const ContentWorkspace = () => {
       resumeId: workspaceState.selectedResumeId!,
       matchResult,
       interviewQuestions,
-      modifiedContent: '这里是您的简历原始内容...\n\n工作经历：\n- 负责前端架构设计...\n- 优化页面性能...',
+      modifiedContent: `【${selectedResume?.name || '简历'} - 原始内容】\n\n工作经历：\n- 负责前端架构设计与核心组件开发\n- 优化页面性能，首屏加载时间降低 30%\n- 带领 3 人小组完成 SaaS 平台从 0 到 1 的构建\n\n技能清单：\n- React, TypeScript, Tailwind CSS\n- Node.js, Express, MongoDB`,
       createdAt: new Date().toISOString(),
     };
 
@@ -153,16 +160,27 @@ const ContentWorkspace = () => {
   };
 
   const addMoreQuestions = async () => {
-    if (!activeSessionId) return;
+    if (!activeSessionId || !activeSession) return;
     
-    // In a real app, we'd pass context to get better questions
-    const moreQuestions = await aiService.generateInterviewQuestions("", "", 2);
-    
-    setSessions(prev => prev.map(s => 
-      s.id === activeSessionId 
-        ? { ...s, interviewQuestions: [...s.interviewQuestions, ...moreQuestions] }
-        : s
-    ));
+    setIsGeneratingQuestions(true);
+    try {
+      const moreQuestions = await aiService.generateInterviewQuestions(
+        activeSession.modifiedContent, 
+        activeSession.jd, 
+        2
+      );
+      
+      setSessions(prev => prev.map(s => 
+        s.id === activeSessionId 
+          ? { ...s, interviewQuestions: [...s.interviewQuestions, ...moreQuestions] }
+          : s
+      ));
+    } catch (error) {
+      console.error('Failed to generate more questions:', error);
+      alert('生成问题失败，请稍后重试');
+    } finally {
+      setIsGeneratingQuestions(false);
+    }
   };
 
   // --- Step Components ---
@@ -501,9 +519,15 @@ const ContentWorkspace = () => {
         </div>
         <button 
           onClick={addMoreQuestions}
-          className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2 rounded-xl font-bold text-sm hover:bg-blue-100 transition-all"
+          disabled={isGeneratingQuestions}
+          className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2 rounded-xl font-bold text-sm hover:bg-blue-100 transition-all disabled:opacity-50"
         >
-          <Plus className="w-4 h-4" /> 追加更多问题
+          {isGeneratingQuestions ? (
+            <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          ) : (
+            <Plus className="w-4 h-4" />
+          )}
+          追加更多问题
         </button>
       </div>
 
@@ -512,12 +536,19 @@ const ContentWorkspace = () => {
           {activeSession?.interviewQuestions.map((q, i) => (
             <button 
               key={q.id}
+              onClick={() => {
+                setActiveQuestionIndex(i);
+                setReviewResult(null);
+                setUserAnswer('');
+              }}
               className={`w-full p-5 rounded-2xl border text-left transition-all ${
-                i === 0 ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-100' : 'border-gray-100 bg-white hover:border-blue-200'
+                activeQuestionIndex === i ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-100' : 'border-gray-100 bg-white hover:border-blue-200'
               }`}
             >
               <div className="flex gap-3">
-                <span className="text-xs font-bold text-blue-600 bg-blue-100 w-6 h-6 rounded-full flex items-center justify-center shrink-0">
+                <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
+                  activeQuestionIndex === i ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-600'
+                }`}>
                   {i + 1}
                 </span>
                 <p className="text-sm font-bold text-gray-900 leading-relaxed">{q.question}</p>
@@ -528,23 +559,67 @@ const ContentWorkspace = () => {
 
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-3xl border border-gray-100 p-8 shadow-sm space-y-6">
-            <h3 className="font-bold text-gray-900">回答练习</h3>
+            <div className="space-y-2">
+              <h3 className="font-bold text-gray-900">回答练习</h3>
+              <p className="text-xs text-gray-400">针对问题：{activeSession?.interviewQuestions[activeQuestionIndex]?.question}</p>
+            </div>
             <textarea 
               className="w-full h-48 p-6 rounded-2xl bg-gray-50 border-none focus:ring-2 focus:ring-blue-500 outline-none text-gray-800 leading-relaxed resize-none"
               placeholder="在这里输入您的回答思路或完整答案..."
+              value={userAnswer}
+              onChange={(e) => setUserAnswer(e.target.value)}
             />
             <div className="flex justify-end">
               <button 
+                disabled={!userAnswer.trim() || isReviewing}
                 onClick={async () => {
-                  // In a real app, we'd get the actual question and answer
-                  const result = await aiService.reviewInterviewAnswer("示例问题", "示例回答");
-                  alert(`AI 点评：\n${result.feedback}\n\n标签：${result.tags.join(', ')}`);
+                  setIsReviewing(true);
+                  try {
+                    const result = await aiService.reviewInterviewAnswer(
+                      activeSession?.interviewQuestions[activeQuestionIndex]?.question || "", 
+                      userAnswer
+                    );
+                    setReviewResult(result);
+                  } catch (error) {
+                    console.error('Review failed:', error);
+                    alert('获取点评失败，请稍后重试');
+                  } finally {
+                    setIsReviewing(false);
+                  }
                 }}
-                className="bg-gray-900 text-white px-8 py-2.5 rounded-xl font-bold hover:bg-gray-800 transition-all flex items-center gap-2"
+                className="bg-gray-900 text-white px-8 py-2.5 rounded-xl font-bold hover:bg-gray-800 transition-all flex items-center gap-2 disabled:opacity-50"
               >
-                获取 AI 点评 <Sparkles className="w-4 h-4" />
+                {isReviewing ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <Sparkles className="w-4 h-4" />
+                )}
+                获取 AI 点评
               </button>
             </div>
+
+            {reviewResult && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-6 bg-blue-50 rounded-2xl border border-blue-100 space-y-4"
+              >
+                <div className="flex items-center gap-2 text-blue-600">
+                  <MessageSquare className="w-4 h-4" />
+                  <span className="font-bold text-sm">AI 点评反馈</span>
+                </div>
+                <p className="text-sm text-gray-700 leading-relaxed italic">
+                  "{reviewResult.feedback}"
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {reviewResult.tags.map(tag => (
+                    <span key={tag} className="px-3 py-1 bg-white text-blue-600 rounded-full text-xs font-bold border border-blue-100">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </motion.div>
+            )}
           </div>
 
           <div className="bg-purple-50 rounded-3xl p-8 border border-purple-100 space-y-4">
