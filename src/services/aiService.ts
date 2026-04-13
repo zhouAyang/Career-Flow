@@ -1,4 +1,4 @@
-import { ContentSession, InterviewQuestion } from '../types';
+import { ContentSession, InterviewQuestion, ResumeOptimizationResult } from '../types';
 
 /**
  * AI Service Layer
@@ -129,18 +129,80 @@ ${text}
   },
 
   /**
-   * Generates interview questions based on resume and JD.
+   * Generates structured resume optimization suggestions.
    */
-  async generateInterviewQuestions(resumeContent: string, jdText: string, count: number = 4): Promise<InterviewQuestion[]> {
-    console.log('AI Service: Generating questions...', { count });
+  async generateResumeSuggestions(resumeContent: string, jdText: string): Promise<ResumeOptimizationResult> {
+    console.log('AI Service: Generating resume suggestions...');
     
     if (this.USE_REAL_API) {
       const prompt = `
-你是一名资深面试官。请根据以下 JD 和简历，生成 ${count} 个针对性的面试问题。
+你是一名专业的简历优化专家。请根据以下 JD 和简历，提供结构化的修改建议。
+请将建议按“实习经历”、“项目经历”、“技能/工具”和“整体建议”进行分组。
+对于前三个分组，每条建议必须包含“原句”和“建议改写”。
+请严格按照以下 JSON 格式输出结果：
+{
+  "internship": [
+    { "original": "原句内容", "suggested": "建议改写后的内容" }
+  ],
+  "projects": [
+    { "original": "原句内容", "suggested": "建议改写后的内容" }
+  ],
+  "skills": [
+    { "original": "原句内容", "suggested": "建议改写后的内容" }
+  ],
+  "overall": ["整体建议1", "整体建议2", ...]
+}
+
+JD 内容：
+${jdText}
+
+简历内容：
+${resumeContent}
+      `;
+
+      return await this.callAI([
+        { role: "system", content: "你是一个专业的简历优化专家，只输出 JSON 格式的数据。" },
+        { role: "user", content: prompt }
+      ], true);
+    }
+
+    // Mock fallback
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    return {
+      internship: [
+        { original: "负责前端架构设计与核心组件开发", suggested: "负责前端架构设计与核心组件开发，推动关键页面组件复用与开发效率提升" },
+        { original: "优化页面性能，首屏加载时间降低30%", suggested: "针对页面加载性能进行专项优化，将首屏加载时间降低30%，提升用户访问体验" }
+      ],
+      projects: [
+        { original: "带领3人小组完成平台从0到1构建", suggested: "带领3人小组完成SaaS平台从0到1搭建，负责需求拆解与核心功能推进" }
+      ],
+      skills: [
+        { original: "React, TypeScript, Tailwind CSS", suggested: "熟悉 React、TypeScript 与 Tailwind CSS，具备前端项目开发与页面优化经验" }
+      ],
+      overall: [
+        "建议整体突出与目标岗位更相关的经历，减少泛化表述",
+        "建议更多使用“负责…并实现…”的句式增强结果表达"
+      ]
+    };
+  },
+
+  /**
+   * Generates interview questions based on resume and JD.
+   */
+  async generateInterviewQuestions(resumeContent: string, jdText: string, type?: 'jd' | 'company' | 'resume', count: number = 3): Promise<InterviewQuestion[]> {
+    console.log('AI Service: Generating questions...', { type, count });
+    
+    if (this.USE_REAL_API) {
+      const typePrompt = type 
+        ? `请专门生成 ${count} 个【${type === 'jd' ? '岗位相关' : type === 'company' ? '公司相关' : '简历相关'}】的面试问题。`
+        : `请生成 ${count} 个面试问题，涵盖岗位匹配度、公司了解程度和简历项目细节。`;
+
+      const prompt = `
+你是一名资深面试官。请根据以下 JD 和简历，${typePrompt}
 请严格按照以下 JSON 格式输出结果：
 {
   "questions": [
-    { "id": "唯一ID", "question": "问题内容" },
+    { "question": "问题内容", "type": "jd | company | resume" },
     ...
   ]
 }
@@ -157,14 +219,22 @@ ${resumeContent}
         { role: "user", content: prompt }
       ], true);
       
-      return result.questions;
+      if (result && result.questions) {
+        return result.questions.map((q: any) => ({
+          id: Math.random().toString(36).substr(2, 9),
+          ...q
+        }));
+      }
+      return [];
     }
 
     await new Promise(resolve => setTimeout(resolve, 1200));
-    return [
-      { id: '1', question: '请详细介绍一下你在项目中的架构设计。' },
-      { id: '2', question: '你是如何处理性能优化问题的？' }
+    const mockQuestions: InterviewQuestion[] = [
+      { id: '1', question: '请详细介绍一下你在项目中的架构设计。', type: 'resume' },
+      { id: '2', question: '你是如何处理性能优化问题的？', type: 'jd' },
+      { id: '3', question: '你对我们公司的业务模式有什么看法？', type: 'company' }
     ];
+    return type ? mockQuestions.filter(q => q.type === type) : mockQuestions;
   },
 
   /**

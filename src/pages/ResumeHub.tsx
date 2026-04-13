@@ -15,6 +15,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import PageHeader from '../components/ui/PageHeader';
 import EmptyState from '../components/ui/EmptyState';
+import { SafeInput } from '../components/ui/SafeInput';
 import { storage } from '../lib/storage';
 import { STORAGE_KEYS } from '../lib/storageKeys';
 import { ResumeItem } from '../types';
@@ -194,14 +195,14 @@ const ResumeHub = () => {
                   <div>
                     {editingResume?.id === resume.id ? (
                       <div className="flex items-center gap-2">
-                        <input 
+                        <SafeInput 
                           autoFocus
                           type="text" 
                           value={editingResume.name}
-                          onChange={(e) => setEditingResume({ ...editingResume, name: e.target.value })}
+                          onValueChange={(val) => setEditingResume({ ...editingResume, name: val })}
                           onBlur={handleRename}
                           onKeyDown={(e) => e.key === 'Enter' && handleRename()}
-                          className="text-sm font-bold text-gray-900 border-b-2 border-blue-500 outline-none py-0.5"
+                          className="text-sm font-bold text-gray-900 border-b-2 border-blue-500 outline-none py-0.5 bg-transparent"
                         />
                       </div>
                     ) : (

@@ -22,6 +22,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import PageHeader from '../components/ui/PageHeader';
 import EmptyState from '../components/ui/EmptyState';
+import { SafeInput, SafeTextarea } from '../components/ui/SafeInput';
 import { storage } from '../lib/storage';
 import { STORAGE_KEYS } from '../lib/storageKeys';
 import { ApplicationItem, ApplicationStatus, TimelineEntry } from '../types';
@@ -207,16 +208,16 @@ const Tracker = () => {
 
       {/* Filters */}
       <div className="flex flex-col md:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input 
-            type="text" 
-            placeholder="搜索公司或岗位..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-          />
-        </div>
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <SafeInput 
+              type="text" 
+              placeholder="搜索公司或岗位..."
+              value={searchQuery}
+              onValueChange={(val) => setSearchQuery(val)}
+              className="w-full pl-12 pr-4 py-3 bg-white border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+            />
+          </div>
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 md:pb-0">
           <button 
             onClick={() => setStatusFilter('All')}
@@ -327,10 +328,10 @@ const Tracker = () => {
                     <label className="text-sm font-bold text-gray-700">公司名称</label>
                     <div className="relative">
                       <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <input 
+                      <SafeInput 
                         type="text" 
-                        value={formData.company}
-                        onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
+                        value={formData.company || ''}
+                        onValueChange={(val) => setFormData(prev => ({ ...prev, company: val }))}
                         placeholder="例如：字节跳动"
                         className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                       />
@@ -340,10 +341,10 @@ const Tracker = () => {
                     <label className="text-sm font-bold text-gray-700">岗位名称</label>
                     <div className="relative">
                       <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <input 
+                      <SafeInput 
                         type="text" 
-                        value={formData.position}
-                        onChange={(e) => setFormData(prev => ({ ...prev, position: e.target.value }))}
+                        value={formData.position || ''}
+                        onValueChange={(val) => setFormData(prev => ({ ...prev, position: val }))}
                         placeholder="例如：前端开发工程师"
                         className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                       />
@@ -354,10 +355,10 @@ const Tracker = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-sm font-bold text-gray-700">投递渠道</label>
-                    <input 
+                    <SafeInput 
                       type="text" 
-                      value={formData.channel}
-                      onChange={(e) => setFormData(prev => ({ ...prev, channel: e.target.value }))}
+                      value={formData.channel || ''}
+                      onValueChange={(val) => setFormData(prev => ({ ...prev, channel: val }))}
                       placeholder="例如：官网、内推、Boss直聘"
                       className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                     />
@@ -399,9 +400,9 @@ const Tracker = () => {
 
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-gray-700">备注</label>
-                  <textarea 
-                    value={formData.notes}
-                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                  <SafeTextarea 
+                    value={formData.notes || ''}
+                    onValueChange={(val) => setFormData(prev => ({ ...prev, notes: val }))}
                     placeholder="记录一些关键信息，如薪资范围、联系人等..."
                     className="w-full h-32 px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none"
                   />

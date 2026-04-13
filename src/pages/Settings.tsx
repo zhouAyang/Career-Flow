@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import PageHeader from '../components/ui/PageHeader';
+import { SafeInput } from '../components/ui/SafeInput';
 import { storage } from '../lib/storage';
 import { STORAGE_KEYS } from '../lib/storageKeys';
 import { UserSettings } from '../types';
@@ -119,30 +120,30 @@ const Settings = () => {
 
                 {/* Form Fields */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-700">用户昵称</label>
-                    <div className="relative">
-                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <input 
-                        type="text" 
-                        value={settings.userName}
-                        onChange={(e) => setSettings(prev => ({ ...prev, userName: e.target.value }))}
-                        className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                      />
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-700">用户昵称</label>
+                      <div className="relative">
+                        <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <SafeInput 
+                          type="text" 
+                          value={settings.userName}
+                          onValueChange={(val) => setSettings(prev => ({ ...prev, userName: val }))}
+                          className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                        />
+                      </div>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-700">电子邮箱</label>
-                    <div className="relative">
-                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <input 
-                        type="email" 
-                        value={settings.email}
-                        onChange={(e) => setSettings(prev => ({ ...prev, email: e.target.value }))}
-                        className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                      />
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-700">电子邮箱</label>
+                      <div className="relative">
+                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <SafeInput 
+                          type="email" 
+                          value={settings.email}
+                          onValueChange={(val) => setSettings(prev => ({ ...prev, email: val }))}
+                          className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                        />
+                      </div>
                     </div>
-                  </div>
                 </div>
 
                 <div className="pt-6 flex items-center justify-between border-t border-gray-50">

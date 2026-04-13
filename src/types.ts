@@ -20,8 +20,21 @@ export interface WorkspaceState {
 export interface InterviewQuestion {
   id: string;
   question: string;
+  type: 'jd' | 'company' | 'resume';
   answer?: string;
   feedback?: string;
+}
+
+export interface ResumeSuggestion {
+  original: string;
+  suggested: string;
+}
+
+export interface ResumeOptimizationResult {
+  internship: ResumeSuggestion[];
+  projects: ResumeSuggestion[];
+  skills: ResumeSuggestion[];
+  overall: string[];
 }
 
 export interface ContentSession {
@@ -36,6 +49,7 @@ export interface ContentSession {
     gaps: string[];
     suggestions: string[];
   };
+  optimizationResult?: ResumeOptimizationResult;
   interviewQuestions: InterviewQuestion[];
   modifiedContent: string;
   createdAt: string;
