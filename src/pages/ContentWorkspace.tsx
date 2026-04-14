@@ -284,7 +284,7 @@ const Step3Analysis = ({
           onClick={onNext}
           className="bg-gray-900 text-white px-10 py-3 rounded-xl font-bold hover:bg-gray-800 transition-all flex items-center gap-2"
         >
-          进入简历修改 <ChevronRight className="w-4 h-4" />
+          进入简历建议 <ChevronRight className="w-4 h-4" />
         </button>
       </div>
     </div>
@@ -292,7 +292,7 @@ const Step3Analysis = ({
 };
 
 const Step4Suggestions = ({ 
-  activeSession,
+  activeSession, 
   onPrev, 
   onNext 
 }: { 
@@ -300,62 +300,20 @@ const Step4Suggestions = ({
   onPrev: () => void, 
   onNext: () => void 
 }) => {
-  const suggestions = activeSession?.optimizationResult;
+  const result = activeSession?.optimizationResult;
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    // In a real app, we might show a toast here
-  };
-
-  const SuggestionCard = ({ original, suggested }: { original: string, suggested: string, key?: any }) => (
-    <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-4 hover:shadow-md transition-all group">
-      <div className="space-y-2">
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">原句</p>
-        <p className="text-sm text-gray-500 leading-relaxed">{original}</p>
-      </div>
-      <div className="h-px bg-gray-50 w-full"></div>
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">建议改写为</p>
-          <button 
-            onClick={() => copyToClipboard(suggested)}
-            className="text-[10px] font-bold text-gray-400 hover:text-blue-600 flex items-center gap-1 transition-colors"
-          >
-            <CheckCircle2 className="w-3 h-3" /> 复制建议
-          </button>
-        </div>
-        <p className="text-sm text-gray-900 font-medium leading-relaxed">{suggested}</p>
-      </div>
-    </div>
-  );
-
-  const Section = ({ title, items, icon: Icon }: { title: string, items: any[] | undefined, icon: any }) => {
-    if (!items || items.length === 0) return null;
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-            <Icon className="w-4 h-4 text-blue-600" />
-          </div>
-          <h3 className="font-bold text-gray-900">{title}</h3>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {items.map((item, i) => (
-            <SuggestionCard key={i} original={item.original} suggested={item.suggested} />
-          ))}
-        </div>
-      </div>
-    );
   };
 
   return (
     <div className="space-y-10">
       <div>
         <h2 className="text-2xl font-bold text-gray-900">简历优化建议</h2>
-        <p className="text-gray-500">AI 已根据目标岗位要求，为您生成了以下针对性的优化建议</p>
+        <p className="text-gray-500">AI 已基于简历原文与 JD 关键词，为您生成了“有证据约束”的优化方案</p>
       </div>
 
-      {!suggestions ? (
+      {!result ? (
         <div className="py-20 text-center space-y-4 bg-white rounded-[2.5rem] border border-gray-100">
           <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto">
             <Wand2 className="w-8 h-8 text-gray-200" />
@@ -363,27 +321,118 @@ const Step4Suggestions = ({
           <p className="text-gray-400">暂无优化建议，请重新开始分析</p>
         </div>
       ) : (
-        <div className="space-y-12">
-          <Section title="实习经历" items={suggestions.internship} icon={Briefcase} />
-          <Section title="项目经历" items={suggestions.projects} icon={Zap} />
-          <Section title="技能/工具" items={suggestions.skills} icon={Target} />
-          
-          {suggestions.overall && suggestions.overall.length > 0 && (
-            <div className="bg-gray-900 rounded-[2.5rem] p-10 text-white space-y-6">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-blue-400" />
-                <h3 className="text-xl font-bold">整体改进建议</h3>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Panel: Modification Suggestions */}
+          <div className="space-y-6">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                <FileText className="w-4 h-4 text-blue-600" />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {suggestions.overall.map((item, i) => (
-                  <div key={i} className="flex gap-4 p-6 bg-white/5 rounded-2xl border border-white/10">
-                    <span className="text-blue-400 font-black text-2xl opacity-50">0{i+1}</span>
-                    <p className="text-sm text-gray-300 leading-relaxed">{item}</p>
-                  </div>
-                ))}
-              </div>
+              <h3 className="font-bold text-gray-900">基于原文的修改建议</h3>
             </div>
-          )}
+            
+            <div className="space-y-4">
+              {result.left_panel.map((item, i) => (
+                <div key={i} className="bg-white rounded-2xl border border-gray-100 p-6 space-y-4 hover:shadow-md transition-all">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-gray-100 text-gray-500 border border-gray-200">
+                      {item.section}
+                    </span>
+                    {item.grounded && (
+                      <span className="text-[10px] font-bold text-green-500 flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" /> 已验证原文
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">原句</p>
+                    <p className="text-sm text-gray-500 leading-relaxed">{item.original_text}</p>
+                  </div>
+
+                  <div className="p-3 bg-amber-50 rounded-xl border border-amber-100">
+                    <p className="text-xs text-amber-700 leading-relaxed">
+                      <span className="font-bold">问题点：</span>{item.issue}
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">建议改写</p>
+                      <button 
+                        onClick={() => copyToClipboard(item.revised_text)}
+                        className="text-[10px] font-bold text-gray-400 hover:text-blue-600 flex items-center gap-1 transition-colors"
+                      >
+                        <CheckCircle2 className="w-3 h-3" /> 复制建议
+                      </button>
+                    </div>
+                    <p className="text-sm text-gray-900 font-medium leading-relaxed">{item.revised_text}</p>
+                  </div>
+
+                  {item.note && (
+                    <p className="text-[10px] text-gray-400 italic">注：{item.note}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right Panel: JD Keyword Matching */}
+          <div className="space-y-6">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center">
+                <Target className="w-4 h-4 text-purple-600" />
+              </div>
+              <h3 className="font-bold text-gray-900">JD 关键词匹配建议</h3>
+            </div>
+
+            <div className="space-y-4">
+              {result.right_panel.map((item, i) => (
+                <div key={i} className={`rounded-2xl border p-6 space-y-4 transition-all ${
+                  item.safe_to_add === 'yes' ? 'bg-white border-gray-100' : 'bg-red-50/30 border-red-100'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-gray-900">{item.jd_keyword}</span>
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border ${
+                        item.safe_to_add === 'yes' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'
+                      }`}>
+                        {item.safe_to_add === 'yes' ? '可强化' : '缺少支撑'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-gray-500 leading-relaxed">{item.jd_reason}</p>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase">建议强化模块：</span>
+                      <span className="text-[10px] font-bold text-gray-700">{item.matched_resume_section}</span>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      <span className="font-bold">简历证据：</span>{item.matched_resume_evidence}
+                    </p>
+                  </div>
+
+                  <div className={`p-4 rounded-xl text-sm leading-relaxed ${
+                    item.safe_to_add === 'yes' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-white text-red-600 border border-red-100 font-medium'
+                  }`}>
+                    {item.suggestion}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {result.overall_note && (
+              <div className="bg-gray-900 rounded-3xl p-8 text-white space-y-4">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-blue-400" />
+                  <h4 className="font-bold">整体建议</h4>
+                </div>
+                <p className="text-sm text-gray-300 leading-relaxed">{result.overall_note}</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

@@ -25,16 +25,28 @@ export interface InterviewQuestion {
   feedback?: string;
 }
 
-export interface ResumeSuggestion {
-  original: string;
-  suggested: string;
+export interface ResumeOptimizationLeftPanel {
+  section: string;
+  original_text: string;
+  issue: string;
+  revised_text: string;
+  grounded: boolean;
+  note: string;
+}
+
+export interface ResumeOptimizationRightPanel {
+  jd_keyword: string;
+  jd_reason: string;
+  matched_resume_section: string;
+  matched_resume_evidence: string;
+  suggestion: string;
+  safe_to_add: 'yes' | 'no';
 }
 
 export interface ResumeOptimizationResult {
-  internship: ResumeSuggestion[];
-  projects: ResumeSuggestion[];
-  skills: ResumeSuggestion[];
-  overall: string[];
+  left_panel: ResumeOptimizationLeftPanel[];
+  right_panel: ResumeOptimizationRightPanel[];
+  overall_note: string;
 }
 
 export interface ContentSession {

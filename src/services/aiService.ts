@@ -129,60 +129,118 @@ ${text}
   },
 
   /**
-   * Generates structured resume optimization suggestions.
+   * Generates structured resume optimization suggestions with strict grounding.
    */
   async generateResumeSuggestions(resumeContent: string, jdText: string): Promise<ResumeOptimizationResult> {
-    console.log('AI Service: Generating resume suggestions...');
+    console.log('AI Service: Generating grounded resume suggestions...');
     
     if (this.USE_REAL_API) {
-      const prompt = `
-你是一名专业的简历优化专家。请根据以下 JD 和简历，提供结构化的修改建议。
-请将建议按“实习经历”、“项目经历”、“技能/工具”和“整体建议”进行分组。
-对于前三个分组，每条建议必须包含“原句”和“建议改写”。
-请严格按照以下 JSON 格式输出结果：
-{
-  "internship": [
-    { "original": "原句内容", "suggested": "建议改写后的内容" }
-  ],
-  "projects": [
-    { "original": "原句内容", "suggested": "建议改写后的内容" }
-  ],
-  "skills": [
-    { "original": "原句内容", "suggested": "建议改写后的内容" }
-  ],
-  "overall": ["整体建议1", "整体建议2", ...]
-}
+      const systemPrompt = `
+你是一名资深 AI 产品工程师和简历优化专家。你的任务是提供“有证据约束的建议生成”，而不是自由润色。
+
+【核心规则 - 严禁编造】
+1. 必须严格以用户上传的简历原文为唯一事实来源。
+2. 只能对简历原句做重组、提炼、压缩和职业化表达，禁止新增任何原简历中没有出现的事实（如虚构的职责、工具、成果、数据）。
+3. 禁止根据 JD 脑补用户经历。
+4. 当信息不足以支持某项优化时，宁可少写，也不要补写。
+5. 如果无法确认某条内容是否被简历支持，默认判定为不支持。
+
+【输出结构】
+你必须返回一个 JSON 对象，包含以下字段：
+- left_panel: 基于简历原文的具体修改建议。
+- right_panel: 基于 JD 的关键词匹配建议。
+- overall_note: 整体建议。
+
+【左侧建议区要求】
+- section: 简历所属模块（如：实习经历、项目经历、技能工具）。
+- original_text: 必须是简历中的原句。
+- issue: 说明这句存在的问题（如：表达冗长、缺乏结果导向、关键词不突出）。
+- revised_text: 修改建议。只能基于原句改写，禁止新增事实。如果原句信息不足，直接提示“建议补充真实内容后再优化”。
+- grounded: 布尔值，是否严格基于原文。
+- note: 补充说明。
+
+【右侧建议区要求】
+- jd_keyword: 从 JD 中提取的关键词。
+- jd_reason: 为什么这个关键词重要。
+- matched_resume_section: 建议在简历哪个模块强化。
+- matched_resume_evidence: 简历中是否有内容支撑该关键词。
+- suggestion: 强化建议。如果简历里没有真实依据，必须明确写：“当前简历缺少经历支撑，需从其他经历加入该关键词”。
+- safe_to_add: 只能是 "yes" 或 "no"。只有当简历中有明确证据支撑时才为 "yes"。
+`;
+
+      const userPrompt = `
+请分析以下 JD 和简历内容，生成优化建议。
 
 JD 内容：
 ${jdText}
 
 简历内容：
 ${resumeContent}
-      `;
+
+请严格按照以下 JSON 格式输出：
+{
+  "left_panel": [
+    {
+      "section": "...",
+      "original_text": "...",
+      "issue": "...",
+      "revised_text": "...",
+      "grounded": true,
+      "note": "..."
+    }
+  ],
+  "right_panel": [
+    {
+      "jd_keyword": "...",
+      "jd_reason": "...",
+      "matched_resume_section": "...",
+      "matched_resume_evidence": "...",
+      "suggestion": "...",
+      "safe_to_add": "yes/no"
+    }
+  ],
+  "overall_note": "..."
+}
+`;
 
       return await this.callAI([
-        { role: "system", content: "你是一个专业的简历优化专家，只输出 JSON 格式的数据。" },
-        { role: "user", content: prompt }
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
       ], true);
     }
 
     // Mock fallback
     await new Promise(resolve => setTimeout(resolve, 2000));
     return {
-      internship: [
-        { original: "负责前端架构设计与核心组件开发", suggested: "负责前端架构设计与核心组件开发，推动关键页面组件复用与开发效率提升" },
-        { original: "优化页面性能，首屏加载时间降低30%", suggested: "针对页面加载性能进行专项优化，将首屏加载时间降低30%，提升用户访问体验" }
+      left_panel: [
+        {
+          section: "实习经历",
+          original_text: "负责前端架构设计与核心组件开发",
+          issue: "描述较为笼统，未体现技术栈与最终产出",
+          revised_text: "负责前端架构设计与核心组件开发，提升了组件复用率",
+          grounded: true,
+          note: "仅对原句进行了精炼，未添加虚构成果"
+        }
       ],
-      projects: [
-        { original: "带领3人小组完成平台从0到1构建", suggested: "带领3人小组完成SaaS平台从0到1搭建，负责需求拆解与核心功能推进" }
+      right_panel: [
+        {
+          jd_keyword: "TypeScript",
+          jd_reason: "JD 明确要求熟练使用 TypeScript",
+          matched_resume_section: "技能工具",
+          matched_resume_evidence: "简历中已提到 TypeScript",
+          suggestion: "建议在项目经历中更多体现 TypeScript 的类型定义实践",
+          safe_to_add: "yes"
+        },
+        {
+          jd_keyword: "Node.js",
+          jd_reason: "岗位涉及全栈开发，需要 Node.js 背景",
+          matched_resume_section: "无",
+          matched_resume_evidence: "当前简历未提及 Node.js 相关经历",
+          suggestion: "当前简历缺少经历支撑，需从其他经历加入该关键词",
+          safe_to_add: "no"
+        }
       ],
-      skills: [
-        { original: "React, TypeScript, Tailwind CSS", suggested: "熟悉 React、TypeScript 与 Tailwind CSS，具备前端项目开发与页面优化经验" }
-      ],
-      overall: [
-        "建议整体突出与目标岗位更相关的经历，减少泛化表述",
-        "建议更多使用“负责…并实现…”的句式增强结果表达"
-      ]
+      overall_note: "简历整体真实度高，建议针对 JD 关键词在已有经历中做更深度的表达强化。"
     };
   },
 
