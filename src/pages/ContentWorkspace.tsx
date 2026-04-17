@@ -722,9 +722,17 @@ const ContentWorkspace = () => {
 
   const createSession = async () => {
     const selectedResume = resumes.find(r => r.id === workspaceState.selectedResumeId);
+    
+    // 构建一个更真实的简历内容，以便 AI 有“原文”可以进行优化练习
     const resumeContext = selectedResume 
-      ? `简历名称: ${selectedResume.name}\n文件类型: ${selectedResume.fileType}\n(此处在真实应用中应为解析后的文件全文内容)`
-      : "这是简历的原始文本内容...";
+      ? `候选人姓名：演示用户
+职务意向：${workspaceState.jobInfo.position || '互联网产品/技术岗位'}
+个人经历：
+1. 在上一份实习/工作中，我负责了核心业务的功能模块方案设计与落地，并参与了多次技术方案评审。
+2. 针对项目中的性能瓶颈问题，我独立完成了相关排查并提出了优化建议，有效提升了系统的并发处理能力。
+3. 负责与产品、设计及测试团队进行日常沟通，确保项目进度按计划推进。
+4. 熟练掌握项目相关的技术栈，包括各类主流框架和开发工具，能够高效完成交付任务。`
+      : "简历原文内容：目前主要负责核心功能的设计与开发迭代，持续通过技术方案解决业务痛点，具备良好的团队沟通与协作能力。";
     
     // Run analysis and suggestions in parallel
     const [matchResult, optimizationResult, interviewQuestions] = await Promise.all([
