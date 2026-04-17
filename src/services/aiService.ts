@@ -231,6 +231,37 @@ ${resumeContent}
   },
 
   /**
+   * Tier 3: Structured Extraction
+   * Cleans up messy text and organizes it into standard resume sections.
+   */
+  async restructureResumeText(rawText: string): Promise<string> {
+    console.log('AI Service: Restructuring resume text...');
+    if (!this.USE_REAL_API || rawText.length < 50) return rawText;
+    
+    const prompt = `
+你是一名专业的简历解析助手。由于原始文本可能存在乱码、换行错误或顺序错乱（尤其是经过 OCR 处理后）。
+请在不丢失任何事实、不增加任何虚构内容的前提下，将以下原始文本整理成结构清晰、排版整齐的简历内容。
+
+必须包含并清晰标注以下结构（如果原文中有对应内容）：
+- 个人基本信息 (姓名、联系方式等)
+- 教育背景
+- 工作/实习经历
+- 项目经历
+- 专业技能
+
+原始文本：
+${rawText}
+
+要求：请直接输出整理后的纯文本简历内容，不要包含任何多余的开场白或解释。
+    `;
+
+    return await this.callAI([
+      { role: "system", content: "你是一个专业的简历结构化提取助手。你的任务是清理文字并重新排版，严禁虚构任何事实。" },
+      { role: "user", content: prompt }
+    ]);
+  },
+
+  /**
    * Reviews a user's interview answer and provides feedback.
    */
   async reviewInterviewAnswer(question: string, answer: string): Promise<{ feedback: string; tags: string[] }> {

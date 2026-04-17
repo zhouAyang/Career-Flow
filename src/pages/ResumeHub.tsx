@@ -21,9 +21,11 @@ import { SafeInput } from '../components/ui/SafeInput';
 import { storage } from '../lib/storage';
 import { STORAGE_KEYS } from '../lib/storageKeys';
 import { ResumeItem } from '../types';
+import { aiService } from '../services/aiService';
 
 import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
+import Tesseract from 'tesseract.js';
 
 // Set worker source for pdf.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
@@ -66,31 +68,76 @@ const ResumeHub = () => {
     const fileType = file.name.split('.').pop()?.toLowerCase();
     
     try {
+      let extractedText = "";
+
       if (fileType === 'pdf') {
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        let fullText = '';
+        
+        // --- Tier 1: Direct Text Extraction ---
+        let directText = '';
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const content = await page.getTextContent();
           const strings = content.items
             .map((item: any) => item.str)
             .filter(str => str.trim().length > 0);
-          fullText += strings.join(' ') + '\n';
+          directText += strings.join(' ') + '\n';
         }
-        return fullText.trim() || "PDF 解析完成，但未发现可提取文本（可能是图片型文档）。";
+
+        // --- Tier 2: OCR Fallback (if direct text is very sparse) ---
+        if (directText.trim().length < 50) {
+          console.log('ResumeHub: Direct extraction failed or sparse. Triggering Tier 2 (OCR)...');
+          let ocrText = '';
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 2.0 }); // High scale for better OCR
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            if (context) {
+              await (page as any).render({ canvasContext: context, viewport }).promise;
+              const imageData = canvas.toDataURL('image/png');
+              const { data: { text } } = await Tesseract.recognize(imageData, 'chi_sim+eng', {
+                logger: m => console.log('Tesseract:', m)
+              });
+              ocrText += text + '\n';
+            }
+          }
+          extractedText = ocrText.trim();
+        } else {
+          extractedText = directText.trim();
+        }
+
       } else if (fileType === 'docx') {
         const arrayBuffer = await file.arrayBuffer();
         const result = await mammoth.extractRawText({ arrayBuffer });
-        return result.value.trim() || "DOCX 解析完成，但未发现内容。";
+        extractedText = result.value.trim();
       } else if (fileType === 'doc') {
         return "无法直接解析 .doc 文件。建议将其另存为 .docx 或 .pdf 格式后再上传，或手动在此处粘贴内容。";
       } else {
         return "不支持的文件格式。";
       }
+
+      // --- Tier 3: Structured Restructuring (AI Cleanup) ---
+      if (extractedText && extractedText.length > 20) {
+        console.log('ResumeHub: Text obtained. Triggering Tier 3 (AI Restructure)...');
+        try {
+          const restructured = await aiService.restructureResumeText(extractedText);
+          return restructured || extractedText;
+        } catch (aiErr) {
+          console.error('Tier 3 restructuring failed:', aiErr);
+          return extractedText; // Return raw extracted text if AI fails
+        }
+      }
+
+      return extractedText || "未发现可提取文本。";
+
     } catch (err) {
-      console.error('Text extraction error:', err);
-      return `解析文件出错: ${err instanceof Error ? err.message : '未知错误'}。建议尝试手动粘贴内容。`;
+      console.error('Extraction flow error:', err);
+      return `分析简历失败: ${err instanceof Error ? err.message : '未知错误'}。建议尝试手动粘贴内容。`;
     }
   };
 
