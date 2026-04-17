@@ -20,6 +20,12 @@ import { storage } from '../lib/storage';
 import { STORAGE_KEYS } from '../lib/storageKeys';
 import { ResumeItem } from '../types';
 
+import * as pdfjsLib from 'pdfjs-dist';
+import mammoth from 'mammoth';
+
+// Set worker source for pdf.js
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
 const ResumeHub = () => {
   const [resumes, setResumes] = useState<ResumeItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -41,26 +47,68 @@ const ResumeHub = () => {
     storage.setData(STORAGE_KEYS.RESUMES, resumes);
   }, [resumes]);
 
-  const handleFileUpload = (files: FileList | null) => {
+  // Helper function to extract text from files
+  const extractTextFromFile = async (file: File): Promise<string> => {
+    const fileType = file.name.split('.').pop()?.toLowerCase();
+    
+    try {
+      if (fileType === 'pdf') {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let fullText = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          const strings = content.items.map((item: any) => item.str);
+          fullText += strings.join(' ') + '\n';
+        }
+        return fullText;
+      } else if (fileType === 'docx') {
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        return result.value;
+      } else if (fileType === 'doc') {
+        // Basic .doc files are harder to parse client-side without a server
+        return "无法直接解析 .doc 文件。建议将其保存为 .docx 或 .pdf 格式后再上传，或手动粘贴内容。";
+      } else {
+        return "不支持的文件格式。";
+      }
+    } catch (err) {
+      console.error('Text extraction error:', err);
+      return `解析文件出错: ${err instanceof Error ? err.message : '未知错误'}`;
+    }
+  };
+
+  const handleFileUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
     setUploadStatus('uploading');
 
-    // Simulate upload delay
-    setTimeout(() => {
-      const newResumes: ResumeItem[] = Array.from(files).map(file => ({
-        id: Math.random().toString(36).substr(2, 9),
-        name: file.name,
-        fileType: file.name.split('.').pop()?.toUpperCase() || 'UNKNOWN',
-        fileSize: file.size,
-        uploadDate: new Date().toISOString()
-      }));
-
-      setResumes(prev => [...newResumes, ...prev]);
-      setUploadStatus('success');
+    try {
+      const newItems: ResumeItem[] = [];
       
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const extractedText = await extractTextFromFile(file);
+        
+        newItems.push({
+          id: Math.random().toString(36).substr(2, 9),
+          name: file.name,
+          fileType: file.name.split('.').pop()?.toUpperCase() || 'UNKNOWN',
+          fileSize: file.size,
+          uploadDate: new Date().toISOString(),
+          textContent: extractedText
+        });
+      }
+
+      setResumes(prev => [...newItems, ...prev]);
+      setUploadStatus('success');
       setTimeout(() => setUploadStatus('idle'), 3000);
-    }, 1000);
+    } catch (error) {
+      console.error('File upload/parse error:', error);
+      setUploadStatus('error');
+      setTimeout(() => setUploadStatus('idle'), 3000);
+    }
   };
 
   const handleDelete = (id: string) => {

@@ -94,21 +94,18 @@ ${resumeContent}
     await new Promise(resolve => setTimeout(resolve, 1500));
     return {
       score: 85,
-      pros: ['5年+ 前端开发经验', '精通 React 生态', '有大型项目背景'],
-      gaps: ['缺乏 Node.js 经验', '未体现构建优化成果'],
-      suggestions: ['补充 Node.js 描述', '量化工作成果'],
+      pros: ['经验丰富', '技能匹配'],
+      gaps: ['缺少部分项目说明'],
+      suggestions: ['建议补充量化指标'],
     };
   },
 
-  /**
-   * Optimizes resume text based on specific actions.
-   */
   async optimizeResumeText(text: string, action: string, jdContext?: string): Promise<string> {
     console.log('AI Service: Optimizing text...', { action });
     
     if (this.USE_REAL_API) {
       const prompt = `
-你是一名专业的简历优化专家。请根据以下要求优化简历片段。
+你是一名专业的简历文案优化专家。请根据以下要求优化简历片段。
 要求：${action}
 ${jdContext ? `目标岗位背景：${jdContext}` : ''}
 
@@ -129,79 +126,44 @@ ${text}
   },
 
   /**
-   * Generates structured resume optimization suggestions with strict grounding.
+   * Generates structured resume optimization suggestions with strict groundedness rules.
    */
   async generateResumeSuggestions(resumeContent: string, jdText: string): Promise<ResumeOptimizationResult> {
     console.log('AI Service: Generating grounded resume suggestions...');
     
     if (this.USE_REAL_API) {
-      const systemPrompt = `
-你是一名资深 AI 产品工程师和简历优化专家。你的任务是提供“有证据约束的建议生成”，而不是自由润色。
+      const systemPrompt = `你是一名极其严谨的简历优化专家和 AI 产品工程师。你的核心任务是执行“有证据约束的文案优化”。
 
-【核心规则 - 严禁编造】
-1. 必须严格以用户上传的简历原文为唯一事实来源。
-2. 只能对简历原句做重组、提炼、压缩和职业化表达，禁止新增任何原简历中没有出现的事实（如虚构的职责、工具、成果、数据）。
-3. 禁止根据 JD 脑补用户经历。
-4. 当信息不足以支持某项优化时，宁可少写，也不要补写。
-5. 如果无法确认某条内容是否被简历支持，默认判定为不支持。
-
-【输出结构】
-你必须返回一个 JSON 对象，包含以下字段：
-- left_panel: 基于简历原文的具体修改建议。
-- right_panel: 基于 JD 的关键词匹配建议。
-- overall_note: 整体建议。
+【最高禁令：严禁虚构】
+1. 事实来源：必须且只能以用户提供的“简历内容”为唯一事实来源。
+2. 零编造规则：严禁给用户增加任何原简历中没有的工作职责、项目成果（尤其是具体的数据如 30%）、所选工具或技术栈。
+3. 身份完整：不要猜测用户的经历背景。如果简历中没写某个项目，严禁根据 JD 脑补。
+4. 鲁棒性处理：如果“简历内容”看起来像是元数据（如只有文件名）、或者内容过少（少于 50 字）无法提供有效的改写建议，请将 left_panel 返回为空数组 []，并在 overall_note 中提示用户：“当前简历解析内容过少或格式不正确，请尝试手动粘贴简历文本或上传更高质量的 PDF 文件。”
 
 【左侧建议区要求】
-- section: 简历所属模块（如：实习经历、项目经历、技能工具）。
-- original_text: 必须是简历中的原句。
-- issue: 说明这句存在的问题（如：表达冗长、缺乏结果导向、关键词不突出）。
-- revised_text: 修改建议。只能基于原句改写，禁止新增事实。如果原句信息不足，直接提示“建议补充真实内容后再优化”。
-- grounded: 布尔值，是否严格基于原文。
+- section: 简历模块。
+- original_text: 必须是简历中真实存在的句子。
+- issue: 诊断该句在表达上的不足。
+- revised_text: 优化方案。要求：通过更好的动词、指标前置、结构调整来提升专业感，但【绝对禁止】加入原句中没有的任何新名词（工具、职责、具体数字）。
+- grounded: 必须确认为 true 且经过二次校验。
 - note: 补充说明。
 
 【右侧建议区要求】
 - jd_keyword: 从 JD 中提取的关键词。
-- jd_reason: 为什么这个关键词重要。
-- matched_resume_section: 建议在简历哪个模块强化。
-- matched_resume_evidence: 简历中是否有内容支撑该关键词。
+- matched_resume_evidence: 简历中是否有内容支撑。
 - suggestion: 强化建议。如果简历里没有真实依据，必须明确写：“当前简历缺少经历支撑，需从其他经历加入该关键词”。
-- safe_to_add: 只能是 "yes" 或 "no"。只有当简历中有明确证据支撑时才为 "yes"。
-`;
+- safe_to_add: 只能是 "yes" 或 "no"。`;
 
-      const userPrompt = `
-请分析以下 JD 和简历内容，生成优化建议。
+      const userPrompt = `请分析以下 JD 和简历内容。
 
 JD 内容：
 ${jdText}
 
-简历内容：
+简历原文：
 ${resumeContent}
 
-请严格按照以下 JSON 格式输出：
-{
-  "left_panel": [
-    {
-      "section": "...",
-      "original_text": "...",
-      "issue": "...",
-      "revised_text": "...",
-      "grounded": true,
-      "note": "..."
-    }
-  ],
-  "right_panel": [
-    {
-      "jd_keyword": "...",
-      "jd_reason": "...",
-      "matched_resume_section": "...",
-      "matched_resume_evidence": "...",
-      "suggestion": "...",
-      "safe_to_add": "yes/no"
-    }
-  ],
-  "overall_note": "..."
-}
-`;
+请严格按照 JSON 格式输出，包含 left_panel, right_panel 和 overall_note。
+如果“简历原文”中没有实质性的经历内容，请让 left_panel 为 []。`;
 
       return await this.callAI([
         { role: "system", content: systemPrompt },
@@ -212,35 +174,9 @@ ${resumeContent}
     // Mock fallback
     await new Promise(resolve => setTimeout(resolve, 2000));
     return {
-      left_panel: [
-        {
-          section: "实习经历",
-          original_text: "负责前端架构设计与核心组件开发",
-          issue: "描述较为笼统，未体现技术栈与最终产出",
-          revised_text: "负责前端架构设计与核心组件开发，提升了组件复用率",
-          grounded: true,
-          note: "仅对原句进行了精炼，未添加虚构成果"
-        }
-      ],
-      right_panel: [
-        {
-          jd_keyword: "TypeScript",
-          jd_reason: "JD 明确要求熟练使用 TypeScript",
-          matched_resume_section: "技能工具",
-          matched_resume_evidence: "简历中已提到 TypeScript",
-          suggestion: "建议在项目经历中更多体现 TypeScript 的类型定义实践",
-          safe_to_add: "yes"
-        },
-        {
-          jd_keyword: "Node.js",
-          jd_reason: "岗位涉及全栈开发，需要 Node.js 背景",
-          matched_resume_section: "无",
-          matched_resume_evidence: "当前简历未提及 Node.js 相关经历",
-          suggestion: "当前简历缺少经历支撑，需从其他经历加入该关键词",
-          safe_to_add: "no"
-        }
-      ],
-      overall_note: "简历整体真实度高，建议针对 JD 关键词在已有经历中做更深度的表达强化。"
+      left_panel: [],
+      right_panel: [],
+      overall_note: "AI 接口未启用或处于模拟模式。"
     };
   },
 
@@ -260,8 +196,7 @@ ${resumeContent}
 请严格按照以下 JSON 格式输出结果：
 {
   "questions": [
-    { "question": "问题内容", "type": "jd | company | resume" },
-    ...
+    { "question": "问题内容", "type": "jd | company | resume" }
   ]
 }
 

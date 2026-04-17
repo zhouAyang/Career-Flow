@@ -4,6 +4,7 @@ export interface ResumeItem {
   fileType: string;
   fileSize: number;
   uploadDate: string;
+  textContent?: string;
 }
 
 export interface WorkspaceState {
