@@ -7,7 +7,7 @@
 ## 在线演示
 
 项目演示地址：  
-[CareerFlow Demo](https://career-flow-sable.vercel.app/)
+https://career-flow-sable.vercel.app/
 ## 项目简介
 
 在实际求职过程中，用户常常会遇到几个典型问题：  
