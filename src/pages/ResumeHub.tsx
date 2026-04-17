@@ -10,9 +10,7 @@ import {
   AlertCircle,
   FileIcon,
   MoreVertical,
-  Download,
-  AlertTriangle,
-  Save
+  Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import PageHeader from '../components/ui/PageHeader';
@@ -21,23 +19,15 @@ import { SafeInput } from '../components/ui/SafeInput';
 import { storage } from '../lib/storage';
 import { STORAGE_KEYS } from '../lib/storageKeys';
 import { ResumeItem } from '../types';
-import { aiService } from '../services/aiService';
 
-import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
-import Tesseract from 'tesseract.js';
-
-// Set worker source for pdf.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
 
 const ResumeHub = () => {
   const [resumes, setResumes] = useState<ResumeItem[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [previewResume, setPreviewResume] = useState<ResumeItem | null>(null);
   const [editingResume, setEditingResume] = useState<{ id: string, name: string } | null>(null);
-  const [editingContent, setEditingContent] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load resumes from localStorage on mount
@@ -46,108 +36,31 @@ const ResumeHub = () => {
     if (savedResumes) {
       setResumes(savedResumes);
     }
-    setIsLoaded(true);
   }, []);
 
   // Save resumes to localStorage whenever they change
   useEffect(() => {
-    if (isLoaded) {
-      storage.setData(STORAGE_KEYS.RESUMES, resumes);
-    }
-  }, [resumes, isLoaded]);
-
-  // Sync editing content when preview changes
-  useEffect(() => {
-    if (previewResume) {
-      setEditingContent(previewResume.textContent || '');
-    }
-  }, [previewResume]);
+    storage.setData(STORAGE_KEYS.RESUMES, resumes);
+  }, [resumes]);
 
   // Helper function to extract text from files
   const extractTextFromFile = async (file: File): Promise<string> => {
     const fileType = file.name.split('.').pop()?.toLowerCase();
     
     try {
-      let extractedText = "";
-
-      if (fileType === 'pdf') {
-        const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        
-        // --- Tier 1: Direct Text Extraction ---
-        let directText = '';
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const content = await page.getTextContent();
-          const strings = content.items
-            .map((item: any) => item.str)
-            .filter(str => str.trim().length > 0);
-          directText += strings.join(' ') + '\n';
-        }
-
-        // --- Tier 2: OCR Fallback (if direct text is very sparse) ---
-        if (directText.trim().length < 50) {
-          console.log('ResumeHub: Direct extraction failed or sparse. Triggering Tier 2 (OCR)...');
-          let ocrText = '';
-          for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const viewport = page.getViewport({ scale: 2.0 }); // High scale for better OCR
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            canvas.height = viewport.height;
-            canvas.width = viewport.width;
-
-            if (context) {
-              await (page as any).render({ canvasContext: context, viewport }).promise;
-              const imageData = canvas.toDataURL('image/png');
-              const { data: { text } } = await Tesseract.recognize(imageData, 'chi_sim+eng', {
-                logger: m => console.log('Tesseract:', m)
-              });
-              ocrText += text + '\n';
-            }
-          }
-          extractedText = ocrText.trim();
-        } else {
-          extractedText = directText.trim();
-        }
-
-      } else if (fileType === 'docx') {
+      if (fileType === 'docx') {
         const arrayBuffer = await file.arrayBuffer();
         const result = await mammoth.extractRawText({ arrayBuffer });
-        extractedText = result.value.trim();
+        return result.value;
       } else if (fileType === 'doc') {
-        return "无法直接解析 .doc 文件。建议将其另存为 .docx 或 .pdf 格式后再上传，或手动在此处粘贴内容。";
+        // Basic .doc files are harder to parse client-side without a server
+        return "无法直接解析 .doc 文件。建议将其保存为 .docx 格式后再上传，或手动粘贴内容。";
       } else {
         return "不支持的文件格式。";
       }
-
-      // --- Tier 3: Structured Restructuring (AI Cleanup) ---
-      if (extractedText && extractedText.length > 20) {
-        console.log('ResumeHub: Text obtained. Triggering Tier 3 (AI Restructure)...');
-        try {
-          const restructured = await aiService.restructureResumeText(extractedText);
-          return restructured || extractedText;
-        } catch (aiErr) {
-          console.error('Tier 3 restructuring failed:', aiErr);
-          return extractedText; // Return raw extracted text if AI fails
-        }
-      }
-
-      return extractedText || "未发现可提取文本。";
-
     } catch (err) {
-      console.error('Extraction flow error:', err);
-      return `分析简历失败: ${err instanceof Error ? err.message : '未知错误'}。建议尝试手动粘贴内容。`;
-    }
-  };
-
-  const handleSaveContent = () => {
-    if (previewResume) {
-      setResumes(prev => prev.map(r => 
-        r.id === previewResume.id ? { ...r, textContent: editingContent } : r
-      ));
-      setPreviewResume({ ...previewResume, textContent: editingContent });
-      alert('内容已保存');
+      console.error('Text extraction error:', err);
+      return `解析文件出错: ${err instanceof Error ? err.message : '未知错误'}`;
     }
   };
 
@@ -232,7 +145,7 @@ const ResumeHub = () => {
           ref={fileInputRef}
           className="hidden" 
           multiple
-          accept=".pdf,.doc,.docx"
+          accept=".doc,.docx"
           onChange={(e) => handleFileUpload(e.target.files)}
         />
         
@@ -255,7 +168,7 @@ const ResumeHub = () => {
           <h3 className="text-xl font-bold text-gray-900">
             {uploadStatus === 'success' ? '上传成功！' : '点击或拖拽简历至此'}
           </h3>
-          <p className="text-gray-500 text-sm">支持 PDF, DOC, DOCX 格式 (最大 10MB)</p>
+          <p className="text-gray-500 text-sm">支持 DOC, DOCX 格式 (最大 10MB)</p>
         </div>
 
         <button 
@@ -288,7 +201,7 @@ const ResumeHub = () => {
             <EmptyState 
               icon={FileText}
               title="暂无简历"
-              description="快去上传你的第一份简历吧，支持 PDF, DOC, DOCX 格式。"
+              description="快去上传你的第一份简历吧，支持 DOC, DOCX 格式。"
               action={
                 <button 
                   onClick={() => fileInputRef.current?.click()}
@@ -404,79 +317,45 @@ const ResumeHub = () => {
                 </button>
               </div>
 
-              <div className="p-0 space-y-0 max-h-[70vh] overflow-y-auto">
-                <div className="p-8 space-y-8">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">文件类型</p>
-                      <p className="text-gray-900 font-bold">{previewResume.fileType}</p>
-                    </div>
-                    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">文件大小</p>
-                      <p className="text-gray-900 font-bold">{formatFileSize(previewResume.fileSize)}</p>
-                    </div>
-                    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">上传日期</p>
-                      <p className="text-gray-900 font-bold">
-                        {new Date(previewResume.uploadDate).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">文档状态</p>
-                      <p className={`font-bold ${editingContent && editingContent.length > 50 ? 'text-green-600' : 'text-amber-500'}`}>
-                        {editingContent && editingContent.length > 50 ? '解析成功' : '需要检查'}
-                      </p>
-                    </div>
+              <div className="p-8 space-y-8">
+                <div className="grid grid-cols-2 gap-8">
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">文件类型</p>
+                    <p className="text-gray-900 font-semibold">{previewResume.fileType}</p>
                   </div>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-1.5 h-6 bg-blue-600 rounded-full" />
-                        <h4 className="font-bold text-gray-900">简历解析内容</h4>
-                      </div>
-                      <button 
-                        onClick={handleSaveContent}
-                        className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95"
-                      >
-                        <Save className="w-3 h-3" /> 保存文字更新
-                      </button>
-                    </div>
-
-                    <div className="relative">
-                      <textarea 
-                        value={editingContent}
-                        onChange={(e) => setEditingContent(e.target.value)}
-                        placeholder="此处显示解析后的简历文字。如果解析失败或为空，请在此手动粘贴简历文本，这是 AI 进行精准分析的关键。"
-                        className="w-full h-80 bg-gray-50 border border-gray-200 rounded-[2rem] p-8 text-sm text-gray-600 leading-relaxed focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all resize-none shadow-inner"
-                      />
-                      {(!editingContent || editingContent.length < 50) && (
-                        <div className="absolute inset-x-0 bottom-8 flex flex-col items-center justify-center pointer-events-none opacity-40">
-                           <AlertTriangle className="w-10 h-10 text-amber-500 mb-2" />
-                           <p className="text-amber-700 text-xs font-bold">内容不足，请手动粘贴简历文字以确保 AI 分析准确</p>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="flex items-center gap-3 p-4 bg-amber-50 rounded-2xl border border-amber-100">
-                      <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
-                      <p className="text-xs text-amber-800 leading-relaxed">
-                        注意：AI 的匹配分析主要依赖于这些文字内容。如果文档是扫描件或解析存在乱码，请务必手动修正。
-                      </p>
-                    </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">文件大小</p>
+                    <p className="text-gray-900 font-semibold">{formatFileSize(previewResume.fileSize)}</p>
                   </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">上传时间</p>
+                    <p className="text-gray-900 font-semibold">
+                      {new Date(previewResume.uploadDate).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">简历 ID</p>
+                    <p className="text-gray-900 font-mono text-sm">{previewResume.id}</p>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 rounded-2xl p-10 flex flex-col items-center justify-center text-center space-y-4 border border-gray-100">
+                  <FileText className="w-12 h-12 text-gray-200" />
+                  <p className="text-gray-400 text-sm max-w-xs">
+                    当前为原型演示版本，暂不支持在线解析文档内容。您可以下载文件进行查看。
+                  </p>
+                  <button className="flex items-center gap-2 bg-white border border-gray-200 px-6 py-2 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-all">
+                    <Download className="w-4 h-4" /> 下载简历
+                  </button>
                 </div>
               </div>
 
-              <div className="p-8 bg-gray-50 border-t border-gray-200 flex justify-end gap-3">
-                <button className="flex items-center gap-2 bg-white border border-gray-200 px-6 py-2 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-all">
-                  <Download className="w-4 h-4" /> 导出文件
-                </button>
+              <div className="p-8 bg-gray-50/50 border-t border-gray-50 flex justify-end">
                 <button 
                   onClick={() => setPreviewResume(null)}
-                  className="bg-gray-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-gray-800 transition-all active:scale-95"
+                  className="bg-gray-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-gray-800 transition-all"
                 >
-                  确定并返回
+                  关闭预览
                 </button>
               </div>
             </motion.div>
