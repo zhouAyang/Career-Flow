@@ -5,9 +5,11 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 import dotenv from 'dotenv';
-import FormData from 'form-data';
 
-dotenv.config();
+// Load .env only in development
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config();
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,7 +20,7 @@ const PORT = 3000;
 // Middleware
 app.use(express.json());
 
-// Request logging
+// Request logging - helpful for debugging Vercel logs
 app.use((req, res, next) => {
   console.log(`[Server] ${req.method} ${req.url}`);
   next();
@@ -30,23 +32,24 @@ app.get('/api/health', (req, res) => {
     status: 'ok', 
     time: new Date().toISOString(), 
     node: process.version,
-    env: process.env.NODE_ENV
+    env: process.env.NODE_ENV,
+    vercel: !!process.env.VERCEL
   });
 });
 
 app.get('/api/debug', (req, res) => {
   res.json({
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY ? 'Present (Masked: ' + process.env.OPENAI_API_KEY.slice(0, 5) + '...)' : 'Missing',
-    SOMARK_API_KEY: process.env.SOMARK_API_KEY ? 'Present (Masked: ' + process.env.SOMARK_API_KEY.slice(0, 5) + '...)' : 'Missing',
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY ? 'Present' : 'Missing',
+    SOMARK_API_KEY: process.env.SOMARK_API_KEY ? 'Present' : 'Missing',
     NODE_ENV: process.env.NODE_ENV,
-    CWD: process.cwd()
+    VERCEL: !!process.env.VERCEL
   });
 });
 
-// Multer setup
+// Multer setup - Using memoryStorage for serverless compatibility
 const upload = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: 200 * 1024 * 1024 } // 200MB per docs
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit (Vercel body limit is 4.5MB anyway)
 });
 
 /**
@@ -55,14 +58,11 @@ const upload = multer({
 app.post('/api/ai/chat', async (req, res) => {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    console.error('OPENAI_API_KEY is missing');
     return res.status(500).json({ error: 'Server configuration error: OPENAI_API_KEY is missing.' });
   }
 
   try {
     const { messages, temperature = 0.7, response_format } = req.body;
-    
-    console.log('Forwarding chat request to OpenAI proxy...');
     
     const apiResponse = await fetch('https://api.gptsapi.net/v1/chat/completions', {
       method: 'POST',
@@ -80,7 +80,6 @@ app.post('/api/ai/chat', async (req, res) => {
 
     if (!apiResponse.ok) {
       const errorData = await apiResponse.json().catch(() => ({}));
-      console.error('OpenAI Proxy Error Status:', apiResponse.status, errorData);
       return res.status(apiResponse.status).json({ error: 'AI Service error', details: errorData });
     }
 
@@ -100,7 +99,6 @@ app.post('/api/parse', upload.single('file'), async (req, res) => {
   const file = req.file;
 
   if (!apiKey) {
-    console.error('SOMARK_API_KEY is missing');
     return res.status(500).json({ error: 'Server configuration error: SOMARK_API_KEY is missing.' });
   }
 
@@ -109,20 +107,17 @@ app.post('/api/parse', upload.single('file'), async (req, res) => {
   }
 
   try {
-    console.log(`Forwarding file ${file.originalname} to SoMark...`);
+    console.log(`Forwarding file ${file.originalname} (${file.size} bytes) to SoMark...`);
     
+    // Using native Node.js FormData (available in Node 18+)
     const formData = new FormData();
-    formData.append('file', file.buffer, { 
-      filename: file.originalname,
-      contentType: file.mimetype,
-      knownLength: file.size
-    });
+    const blob = new Blob([file.buffer], { type: file.mimetype });
+    formData.append('file', blob, file.originalname);
     formData.append('api_key', apiKey);
 
     const apiResponse = await fetch('https://somark.tech/api/v1/parse/sync', {
       method: 'POST',
-      headers: formData.getHeaders(),
-      body: formData.getBuffer()
+      body: formData
     });
 
     if (!apiResponse.ok) {
@@ -134,14 +129,15 @@ app.post('/api/parse', upload.single('file'), async (req, res) => {
     const data = await apiResponse.json();
     
     let extractedText = '';
+    // Structure: { code: 0, data: { elements: [...] } }
     if (data.code === 0 && data.data && data.data.elements) {
       extractedText = data.data.elements
         .filter((el: any) => el.type === 'text' || el.type === 'title')
-        .map((el: any) => el.content || el.text)
+        .map((el: any) => el.content || el.text || '')
         .join('\n');
     } else if (data.content) {
       extractedText = data.content;
-    } else if (data.data && data.data.content) {
+    } else if (data.data?.content) {
       extractedText = data.data.content;
     } else {
       extractedText = JSON.stringify(data.data || data);
@@ -154,28 +150,25 @@ app.post('/api/parse', upload.single('file'), async (req, res) => {
   }
 });
 
-// Catch unmatched /api routes and return JSON 404
+// Catch unmatched /api routes
 app.all('/api/*', (req, res) => {
-  console.log(`[Server] Unmatched API route: ${req.method} ${req.url}`);
   res.status(404).json({ error: `Not Found: ${req.method} ${req.url}` });
 });
 
-// Vite middleware for development (Only if not running as a Vercel function)
+// In Vercel, we only export the app. 
+// In development or container production, we listen on a port.
 if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   createViteServer({
     server: { middlewareMode: true },
     appType: 'spa',
   }).then((vite) => {
     app.use(vite.middlewares);
-    
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`Development server started on http://localhost:${PORT}`);
     });
-  }).catch(err => {
-    console.error('Failed to start Vite middleware:', err);
   });
-} else if (process.env.NODE_ENV === 'production') {
-  // Serve static files in production (For containerized deployment, not Vercel)
+} else if (!process.env.VERCEL) {
+  // Production container (listening on port)
   const distPath = path.join(process.cwd(), 'dist');
   if (fs.existsSync(distPath)) {
     app.use(express.static(distPath));
@@ -184,12 +177,9 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
     });
   }
   
-  // Conditionally listen if not using Vercel (Vercel exports the app)
-  if (!process.env.VERCEL) {
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`Production server started on port ${PORT}`);
-    });
-  }
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Production server started on port ${PORT}`);
+  });
 }
 
 export default app;
