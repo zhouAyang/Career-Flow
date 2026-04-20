@@ -6,3 +6,7 @@ coverage/
 *.log
 .env*
 !.env.example
+
+uploads/
+.claude/
+text.pdf
