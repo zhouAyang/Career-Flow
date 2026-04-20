@@ -1,67 +1,50 @@
-# CareerFlow AI 部署说明 (Vercel)
+# CareerFlow AI 部署与说明 (Full-Stack Express + Vite)
 
-本项目已针对 Vercel 部署进行了工程化准备，采用了 **前端 (Vite + React) + 后端代理 (Vercel Serverless Functions)** 的架构。
+本项目已从纯前端架构升级为 **Full-Stack ( Express + Vite )** 全栈架构，专为 AI 应用的安全性与扩展性而设计。
 
-## 1. 为什么需要服务端代理？
+## 1. 架构方案：Express 代理与托管
 
-**核心原因：安全性 (Security)**
+为了确保 **API Key 的安全性** 以及 **PDF 智能解析** 的实现，我们采用了统一的后端入口：
 
-- **隐藏 API Key**：如果直接在前端代码中调用 OpenAI API，你的 `OPENAI_API_KEY` 会暴露在浏览器的 Network 面板中，任何人都可以轻易窃取并消耗你的额度。
-- **跨域处理 (CORS)**：通过同域下的 `/api/*` 路径调用，可以避免复杂的跨域配置。
-- **中转站支持**：通过代理可以方便地接入 `gptsapi` 等中转服务。
+- **前端 (Frontend)**: 基于 Vite 6 + React 19 的现代化单页应用。
+- **后端 (Backend)**: 基于 Express 的全栈 Node.js 监听服务。
+- **解析引擎 (Parser)**: 集成 **SoMark** 第三方智能解析服务，通过后端中转解决浏览器端的 PDF 无法解析问题。
 
-## 2. 环境变量配置
+### 为什么采用此架构？
+- **安全隔离**：`OPENAI_API_KEY` 与 `SOMARK_API_KEY` 仅保存在服务端环境变量中，永远不会暴露给客户端。
+- **处理复杂请求**：PDF 解析需要 `multipart/form-data` 处理，后端 `multer` 配合 `form-data` 库比前端直接调用第三方接口更稳定、更安全。
+- **统一路由**：所有 `/api/*` 请求均由 Express 处理，其余静态资源由 Express 托管 dist 目录。
 
-在 Vercel 部署时，请在项目设置的 **Environment Variables** 页面添加以下变量：
+## 2. 环境变量配置 (Secrets)
 
-| 变量名 | 说明 | 示例值 |
+在部署环境（如 Cloud Run, Vercel, Docker）中，必须配置以下环境变量：
+
+| 变量名 | 必填 | 说明 |
 | :--- | :--- | :--- |
-| `OPENAI_API_KEY` | OpenAI 中转站的 API 密钥 | `sk-xxxx...` |
-| `SOMARK_API_KEY` | SoMark PDF 解析 API 密钥 | `sk-xxxx...` |
+| `OPENAI_API_KEY` | 是 | OpenAI 或其兼容中转站的 API 密钥 (用于聊天及优化) |
+| `SOMARK_API_KEY` | 是 | SoMark 智能解析平台的 API 密钥 (用于 PDF 解析) |
+| `GEMINI_API_KEY` | 否 | 用于特定 Google AI 功能的密钥 (AI Studio 自动注入) |
 
-> **注意**：前端代码中不需要配置此变量，它们仅在 `api/` 目录下的服务端代码中通过 `process.env` 访问。
+## 3. 开发与构建命令
 
-## 3. 目录结构说明
+| 命令 | 描述 |
+| :--- | :--- |
+| `npm run dev` | 启动开发服务器。由 `tsx server.ts` 启动，集成 Vite 中间件。 |
+| `npm run build` | **部署前必运行**。编译前端代码到 `dist/` 目录。 |
+| `npm start` | 在生产环境中运行 Express 服务（需先运行 build）。 |
 
-- `/src`: 前端 React 源代码。
-- `/api`: Vercel Serverless Functions 目录。
-  - `/api/ai/chat.ts`: 统一的 AI 聊天代理接口，对应路径 `/api/ai/chat`。
-  - `/api/parse-resume.ts`: 简历文件解析接口，对应路径 `/api/parse-resume`，支持 PDF、DOC、DOCX 格式。
+## 4. API 接口概览
 
-## 4. AI 功能接入
+- **POST `/api/ai/chat`**: 智能对话中转。
+- **POST `/api/parse`**: 简历上传与解析。支持 PDF/DOC/DOCX。
+- **GET `/api/health`**: 服务运行状态检查。
+- **GET `/api/debug`**: (建议仅开发环境) 检查 API Key 加载状态。
 
-本项目已全面接入真实 AI 能力（基于 `gpt-4o-mini`）：
-- **JD 匹配分析**：自动分析简历与岗位的匹配度。
-- **简历优化**：针对性润色简历文案。
-- **面试问题生成**：基于背景预测高频面试题。
-- **面试回答点评**：实时反馈回答质量。
+## 5. 部署步骤 (通用)
 
-## 5. 文件上传解析功能
+1. **环境准备**：确保环境变量已在运行环境配置。
+2. **构建**：执行 `npm run build` 产出静态文件。
+3. **启动**：生产环境执行 `NODE_ENV=production node server.ts` (或 `npm start`)。
 
-本项目支持 PDF 和 Word 简历文件上传解析：
-
-### 支持的文件格式
-- **PDF 文件**：通过 SoMark API 进行解析（需要 `SOMARK_API_KEY` 环境变量）
-- **Word 文件**：DOC 和 DOCX 格式，使用 mammoth 库解析
-
-### 文件大小限制
-- 最大文件大小：10MB
-- Vercel 函数配置：已在 `vercel.json` 中设置 `maxRequestBodySize: 10485760`（10MB）
-
-### API 端点
-- `POST /api/parse-resume`：简历文件解析接口
-  - 请求：`multipart/form-data`，字段名 `file`
-  - 响应：`{ text: string, fileName: string, fileType: string }`
-
-## 6. 本地开发
-
-本地开发支持两种方式：
-
-### 前端开发
-运行 `npm run dev` 启动前端开发服务器。
-
-### 后端 API 开发
-1. **完整服务器模式**：运行 `npm run dev:full` 启动 Express 服务器（包含文件上传功能）
-2. **Vercel 函数模式**：运行 `vercel dev` 启动 Vercel 开发服务器，支持所有 API 端点
-
-> **注意**：文件上传功能在 Vercel 部署中需要使用 `SOMARK_API_KEY` 环境变量，本地开发时可在 `.env` 文件中配置。
+---
+*注意：在 AI Studio 预览环境中，所有修改已实时生效，只需在 Secrets 面板配置密钥即可体验完整功能。*

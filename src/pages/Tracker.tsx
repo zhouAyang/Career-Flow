@@ -26,7 +26,6 @@ import { SafeInput, SafeTextarea } from '../components/ui/SafeInput';
 import { storage } from '../lib/storage';
 import { STORAGE_KEYS } from '../lib/storageKeys';
 import { ApplicationItem, ApplicationStatus, TimelineEntry } from '../types';
-import { validateApplicationStatus, createApplicationItem, validateFormData } from '../lib/typeValidation';
 
 const STATUS_CONFIG: Record<ApplicationStatus, { color: string, bg: string, icon: any }> = {
   '已投递': { color: 'text-blue-600', bg: 'bg-blue-50', icon: Clock },
@@ -90,22 +89,20 @@ const Tracker = () => {
 
     if (selectedApp) {
       // Update existing
-      const validatedData = validateFormData(formData);
-      const updatedApp = {
+      const updatedApp: ApplicationItem = {
         ...selectedApp,
-        ...validatedData,
+        ...formData,
         updatedAt: new Date().toISOString(),
-      };
+      } as ApplicationItem;
       
       // If status changed, add to timeline
-      if (validatedData.status && validatedData.status !== selectedApp.status) {
-        const validatedStatus = validateApplicationStatus(validatedData.status);
+      if (formData.status !== selectedApp.status) {
         updatedApp.timeline = [
           {
             id: Math.random().toString(36).substr(2, 9),
-            status: validatedStatus,
+            status: formData.status as ApplicationStatus,
             date: new Date().toISOString(),
-            note: `状态更新为 ${validatedStatus}`,
+            note: `状态更新为 ${formData.status}`,
           },
           ...selectedApp.timeline
         ];
@@ -114,16 +111,17 @@ const Tracker = () => {
       setApplications(prev => prev.map(a => a.id === selectedApp.id ? updatedApp : a));
     } else {
       // Create new
-      const validatedData = validateFormData(formData);
-      const newApp = createApplicationItem({
-        ...validatedData,
+      const newApp: ApplicationItem = {
+        id: Math.random().toString(36).substr(2, 9),
+        ...formData,
         timeline: [{
           id: Math.random().toString(36).substr(2, 9),
-          status: validatedData.status || '已投递',
+          status: formData.status as ApplicationStatus,
           date: new Date().toISOString(),
           note: '创建申请记录',
         }],
-      });
+        updatedAt: new Date().toISOString(),
+      } as ApplicationItem;
       setApplications(prev => [newApp, ...prev]);
     }
 
@@ -369,7 +367,7 @@ const Tracker = () => {
                     <label className="text-sm font-bold text-gray-700">当前状态</label>
                     <select 
                       value={formData.status}
-                      onChange={(e) => setFormData(prev => ({ ...prev, status: validateApplicationStatus(e.target.value) }))}
+                      onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as ApplicationStatus }))}
                       className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none bg-white"
                     >
                       {(Object.keys(STATUS_CONFIG) as ApplicationStatus[]).map(status => (

@@ -1,4 +1,3 @@
-/// <reference types="vite/client" />
 import { ContentSession, InterviewQuestion, ResumeOptimizationResult } from '../types';
 
 /**
@@ -14,11 +13,10 @@ import { ContentSession, InterviewQuestion, ResumeOptimizationResult } from '../
 
 export const aiService = {
   /**
-   * 是否启用真实 AI 调用
-   * - 生产环境默认启用真实API
-   * - 开发环境默认使用Mock数据，可通过设置 VITE_USE_REAL_API=true 启用真实API
+   * 是否启用真实 AI 调用 (部署在 Vercel 后可设为 true)
+   * 注意：在本地开发时，如果未配置 OPENAI_API_KEY，请保持为 false 以使用 Mock 数据
    */
-  USE_REAL_API: import.meta.env.PROD || import.meta.env.VITE_USE_REAL_API === 'true',
+  USE_REAL_API: true,
 
   /**
    * 统一调用 AI 聊天接口
@@ -36,9 +34,23 @@ export const aiService = {
         })
       });
 
+      const contentType = response.headers.get('content-type');
+      
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `AI API responded with status ${response.status}`);
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `AI API responded with status ${response.status}`);
+        } else {
+          const text = await response.text();
+          console.error('Non-JSON Error Response:', text);
+          throw new Error(`AI API 错误 (${response.status}): ${text.slice(0, 100)}...`);
+        }
+      }
+
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Expected JSON but got:', contentType, text);
+        throw new Error('服务器响应格式错误 (非 JSON)');
       }
 
       const data = await response.json();
@@ -105,7 +117,7 @@ ${resumeContent}
   async optimizeResumeText(text: string, action: string, jdContext?: string): Promise<string> {
     console.log('AI Service: Optimizing text...', { action });
     
-    if (this.USE_REAL_API) {
+if (this.USE_REAL_API) {
       const prompt = `
 # Role
 你是一名拥有 10 年经验的资深猎头与简历专家，擅长使用结果导向（Action-oriented）的语言提升简历专业度。

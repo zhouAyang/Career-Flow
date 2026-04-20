@@ -59,14 +59,12 @@ export const storage = {
    */
   clearAll: (): void => {
     try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
+      Object.values(localStorage).forEach((_, index) => {
+        const key = localStorage.key(index);
         if (key?.startsWith('careerflow_')) {
           localStorage.removeItem(key);
-          // 删除后数组索引变化，需要调整i
-          i--;
         }
-      }
+      });
     } catch (error) {
       console.error('[Storage] Error clearing storage:', error);
     }

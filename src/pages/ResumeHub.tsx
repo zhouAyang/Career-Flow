@@ -20,8 +20,7 @@ import { storage } from '../lib/storage';
 import { STORAGE_KEYS } from '../lib/storageKeys';
 import { ResumeItem } from '../types';
 
-const SUPPORTED_EXTENSIONS = ['doc', 'docx', 'pdf'];
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+import mammoth from 'mammoth';
 
 const ResumeHub = () => {
   const [resumes, setResumes] = useState<ResumeItem[]>([]);
@@ -44,36 +43,49 @@ const ResumeHub = () => {
     storage.setData(STORAGE_KEYS.RESUMES, resumes);
   }, [resumes]);
 
-  // Helper function to extract text from files via backend API
+  // Helper function to extract text from files
   const extractTextFromFile = async (file: File): Promise<string> => {
     const fileType = file.name.split('.').pop()?.toLowerCase();
-
-    // 验证文件类型
-    if (!fileType || !SUPPORTED_EXTENSIONS.includes(fileType)) {
-      throw new Error(`不支持的文件格式。仅支持 ${SUPPORTED_EXTENSIONS.map(ext => ext.toUpperCase()).join('、')} 文件。`);
-    }
-
+    
     try {
-      // 调用后端 API 解析文件
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch('/api/parse-resume', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `解析失败 (${response.status})`);
+      if (fileType === 'docx') {
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        return result.value;
+      } else if (fileType === 'pdf' || fileType === 'doc') {
+        // Use the server-side SoMark proxy for PDF and .doc files
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await fetch('/api/parse', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const contentType = response.headers.get('content-type');
+        
+        if (!response.ok) {
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `服务器解析失败 (${response.status})`);
+          } else {
+            const text = await response.text();
+            throw new Error(`服务器解析错误 (${response.status}): ${text.slice(0, 50)}...`);
+          }
+        }
+        
+        if (!contentType || !contentType.includes('application/json')) {
+          throw new Error('解析响应格式错误 (非 JSON)');
+        }
+        
+        const data = await response.json();
+        return data.text || "解析结果为空";
+      } else {
+        return "不支持的文件格式。建议使用 PDF, DOCX 或 DOC 格式。";
       }
-
-      const data = await response.json();
-      return data.text || '解析结果为空';
-
     } catch (err) {
       console.error('Text extraction error:', err);
-      throw err;
+      return `解析文件出错: ${err instanceof Error ? err.message : '未知错误'}`;
     }
   };
 
@@ -84,21 +96,9 @@ const ResumeHub = () => {
 
     try {
       const newItems: ResumeItem[] = [];
-
+      
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const fileExt = file.name.split('.').pop()?.toLowerCase();
-
-        if (!fileExt || !SUPPORTED_EXTENSIONS.includes(fileExt)) {
-          alert(`文件 "${file.name}" 格式不支持。仅支持 DOC、DOCX、PDF 格式。`);
-          continue;
-        }
-
-        if (file.size > MAX_FILE_SIZE) {
-          alert(`文件 "${file.name}" 大小超过限制。最大支持 10MB。`);
-          continue;
-        }
-
         const extractedText = await extractTextFromFile(file);
         
         newItems.push({
@@ -170,7 +170,7 @@ const ResumeHub = () => {
           ref={fileInputRef}
           className="hidden" 
           multiple
-          accept=".doc,.docx,.pdf"
+          accept=".pdf,.doc,.docx"
           onChange={(e) => handleFileUpload(e.target.files)}
         />
         
@@ -193,7 +193,7 @@ const ResumeHub = () => {
           <h3 className="text-xl font-bold text-gray-900">
             {uploadStatus === 'success' ? '上传成功！' : '点击或拖拽简历至此'}
           </h3>
-          <p className="text-gray-500 text-sm">支持 DOC, DOCX, PDF 格式 (最大 10MB)</p>
+          <p className="text-gray-500 text-sm">支持 PDF, DOC, DOCX 格式 (最大 10MB)</p>
         </div>
 
         <button 
@@ -226,7 +226,7 @@ const ResumeHub = () => {
             <EmptyState 
               icon={FileText}
               title="暂无简历"
-              description="快去上传你的第一份简历吧，支持 DOC, DOCX, PDF 格式。"
+              description="快去上传你的第一份简历吧，支持 PDF, DOC, DOCX 格式。"
               action={
                 <button 
                   onClick={() => fileInputRef.current?.click()}
@@ -310,21 +310,21 @@ const ResumeHub = () => {
       {/* Preview Modal */}
       <AnimatePresence>
         {previewResume && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100] overflow-y-auto px-4 py-12 flex justify-center items-start sm:items-center">
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setPreviewResume(null)}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm"
             />
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden"
+              className="relative bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col"
             >
-              <div className="p-8 border-b border-gray-50 flex items-center justify-between">
+              <div className="p-8 border-b border-gray-50 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
                     <FileIcon className="w-6 h-6" />
@@ -337,12 +337,13 @@ const ResumeHub = () => {
                 <button 
                   onClick={() => setPreviewResume(null)}
                   className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all"
+                  aria-label="Close"
                 >
                   <X className="w-6 h-6" />
                 </button>
               </div>
 
-              <div className="p-8 space-y-8">
+              <div className="p-8 space-y-8 overflow-y-auto max-h-[70vh] no-scrollbar">
                 <div className="grid grid-cols-2 gap-8">
                   <div className="space-y-1">
                     <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">文件类型</p>
@@ -364,40 +365,27 @@ const ResumeHub = () => {
                   </div>
                 </div>
 
-                {previewResume.textContent ? (
-                  <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-bold text-gray-900">解析的简历内容</h4>
-                      <span className="text-xs font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                        已解析
-                      </span>
-                    </div>
-                    <div className="max-h-96 overflow-y-auto bg-white rounded-lg p-4 border border-gray-200">
-                      <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">简历解析内容</p>
+                  <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100 min-h-[200px]">
+                    {previewResume.textContent ? (
+                      <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">
                         {previewResume.textContent}
                       </pre>
-                    </div>
-                    <div className="mt-4 text-xs text-gray-500">
-                      共 {previewResume.textContent.length} 个字符
-                    </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-10 text-center space-y-3">
+                        <AlertCircle className="w-8 h-8 text-gray-300" />
+                        <p className="text-gray-400 text-sm">该简历暂未提取到文本内容</p>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="bg-gray-50 rounded-2xl p-10 flex flex-col items-center justify-center text-center space-y-4 border border-gray-100">
-                    <FileText className="w-12 h-12 text-gray-200" />
-                    <p className="text-gray-400 text-sm max-w-xs">
-                      该简历未解析或解析内容为空。您可以下载文件进行查看。
-                    </p>
-                    <button className="flex items-center gap-2 bg-white border border-gray-200 px-6 py-2 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-all">
-                      <Download className="w-4 h-4" /> 下载简历
-                    </button>
-                  </div>
-                )}
+                </div>
               </div>
 
-              <div className="p-8 bg-gray-50/50 border-t border-gray-50 flex justify-end">
+              <div className="p-8 bg-gray-50/50 border-t border-gray-50 flex justify-end shrink-0">
                 <button 
                   onClick={() => setPreviewResume(null)}
-                  className="bg-gray-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-gray-800 transition-all"
+                  className="bg-gray-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-gray-800 transition-all font-sans"
                 >
                   关闭预览
                 </button>

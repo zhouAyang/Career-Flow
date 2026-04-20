@@ -831,10 +831,10 @@ const ContentWorkspace = () => {
                 </div>
               ) : (
                 sessions.map(session => (
-                  <button
+                  <div
                     key={session.id}
                     onClick={() => selectSession(session.id)}
-                    className={`w-full p-4 rounded-2xl text-left transition-all group relative ${
+                    className={`w-full p-4 rounded-2xl text-left transition-all group relative cursor-pointer ${
                       activeSessionId === session.id 
                         ? 'bg-blue-50 border border-blue-100' 
                         : 'hover:bg-gray-50 border border-transparent'
@@ -857,7 +857,7 @@ const ContentWorkspace = () => {
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
-                  </button>
+                  </div>
                 ))
               )}
             </div>
