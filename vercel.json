@@ -2,8 +2,7 @@
   "functions": {
     "api/parse-resume.ts": {
       "maxDuration": 60,
-      "memory": 1024,
-      "maxRequestBodySize": 10485760
+      "memory": 1024
     }
   }
 }
