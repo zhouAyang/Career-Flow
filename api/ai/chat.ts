@@ -34,7 +34,8 @@ export default async function handler(
     }
 
     // 3. Forward request to the OpenAI proxy (gptsapi)
-    const apiResponse = await fetch('https://api.gptsapi.net/v1/chat/completions', {
+    const openaiBaseUrl = process.env.OPENAI_API_URL || 'https://api.gptsapi.net';
+    const apiResponse = await fetch(`${openaiBaseUrl}/v1/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

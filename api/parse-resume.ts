@@ -79,7 +79,8 @@ async function parsePdfWithSoMark(fileBuffer: Buffer, filename: string): Promise
   formData.append('api_key', somarkKey);
   formData.append('file', fileBuffer, { filename });
 
-  const somarkResponse = await fetch('https://somark.tech/api/v1/parse/sync', {
+  const somarkBaseUrl = process.env.SOMARK_API_URL || 'https://somark.tech/api/v1';
+  const somarkResponse = await fetch(`${somarkBaseUrl}/parse/sync`, {
     method: 'POST',
     headers: formData.getHeaders(),
     body: formData.getBuffer()

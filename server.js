@@ -79,7 +79,8 @@ app.post('/api/parse-resume', upload.single('file'), async (req, res) => {
       formData.append('api_key', somarkKey);
       formData.append('file', fileBuffer, { filename: originalName });
 
-      const somarkResponse = await fetch('https://somark.tech/api/v1/parse/sync', {
+      const somarkBaseUrl = process.env.SOMARK_API_URL || 'https://somark.tech/api/v1';
+      const somarkResponse = await fetch(`${somarkBaseUrl}/parse/sync`, {
         method: 'POST',
         headers: formData.getHeaders(),
         body: formData
@@ -187,7 +188,8 @@ app.post('/api/ai/chat', async (req, res) => {
     }
 
     // 2. 转发请求到 OpenAI API
-    const apiResponse = await fetch('https://api.gptsapi.net/v1/chat/completions', {
+    const openaiBaseUrl = process.env.OPENAI_API_URL || 'https://api.gptsapi.net';
+    const apiResponse = await fetch(`${openaiBaseUrl}/v1/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
