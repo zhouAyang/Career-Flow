@@ -1,5 +1,4 @@
 import express from 'express';
-import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -163,13 +162,16 @@ const isMainModule = fileURLToPath(import.meta.url) === process.argv[1];
 
 if (!process.env.VERCEL) {
   if (process.env.NODE_ENV !== 'production') {
-    createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    }).then((vite) => {
-      app.use(vite.middlewares);
-      app.listen(PORT, '0.0.0.0', () => {
-        console.log(`Development server started on http://localhost:${PORT}`);
+    // Dynamic import vite only in development to prevent Vercel from bundling it
+    import('vite').then(({ createServer }) => {
+      createServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      }).then((vite) => {
+        app.use(vite.middlewares);
+        app.listen(PORT, '0.0.0.0', () => {
+          console.log(`Development server started on http://localhost:${PORT}`);
+        });
       });
     });
   } else {
