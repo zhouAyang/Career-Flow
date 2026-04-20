@@ -17,6 +17,7 @@
 | 变量名 | 说明 | 示例值 |
 | :--- | :--- | :--- |
 | `OPENAI_API_KEY` | OpenAI 中转站的 API 密钥 | `sk-xxxx...` |
+| `SOMARK_API_KEY` | SoMark PDF 解析 API 密钥（`/api/parse-resume` 必需） | `somark-xxxx...` |
 
 > **注意**：前端代码中不需要配置此变量，它仅在 `api/` 目录下的服务端代码中通过 `process.env.OPENAI_API_KEY` 访问。
 
@@ -25,6 +26,7 @@
 - `/src`: 前端 React 源代码。
 - `/api`: Vercel Serverless Functions 目录。
   - `/api/ai/chat.ts`: 统一的 AI 聊天代理接口，对应路径 `/api/ai/chat`。
+  - `/api/parse-resume.ts`: 简历解析接口（支持 PDF/DOC/DOCX），对应路径 `/api/parse-resume`。
 
 ## 4. AI 功能接入
 
@@ -38,3 +40,10 @@
 
 运行 `npm run dev` 启动前端。
 如果需要本地调试 API 接口，建议安装 [Vercel CLI](https://vercel.com/cli) 并运行 `vercel dev`。
+
+
+## 6. 简历解析接口注意事项
+
+- `POST /api/parse-resume` 需要以 `multipart/form-data` 上传 `file` 字段。
+- 支持文件类型：`pdf`、`doc`、`docx`。
+- 若部署环境缺少 `SOMARK_API_KEY`，接口会返回 `500` 和明确错误信息。
